@@ -2,6 +2,7 @@
 
 import { Star, MapPin, CheckCircle, Video, Play, Award, Zap, Shield } from "lucide-react";
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 export default function CreatorProfileClient({ creator }: { creator: Record<string, any> }) {
     return (
@@ -9,10 +10,12 @@ export default function CreatorProfileClient({ creator }: { creator: Record<stri
             {/* Cover Image */}
             <div className="relative h-[40vh] md:h-[50vh] w-full overflow-hidden">
                 <div className="absolute inset-0 bg-stone-900/30 z-10" />
-                <img
+                <Image
                     src={creator.coverImage}
                     alt="Cover"
-                    className="w-full h-full object-cover"
+                    fill
+                    className="object-cover"
+                    priority
                 />
                 {/* Navigation Bar integration area (transparent) */}
                 <div className="absolute top-0 w-full p-6 z-20 flex justify-between items-center text-white">
@@ -40,7 +43,7 @@ export default function CreatorProfileClient({ creator }: { creator: Record<stri
                         >
                             {/* Avatar */}
                             <div className="relative w-32 h-32 rounded-full border-4 border-white shadow-lg overflow-hidden mb-6 bg-stone-100">
-                                <img src={creator.avatar} alt={creator.name} className="w-full h-full object-cover" />
+                                <Image src={creator.avatar} alt={creator.name} fill className="object-cover" />
                             </div>
 
                             {/* Name & Badge */}
@@ -142,7 +145,7 @@ export default function CreatorProfileClient({ creator }: { creator: Record<stri
                                         key={item.id}
                                         className={`group relative rounded-2xl overflow-hidden bg-stone-100 cursor-pointer ${index === 0 ? 'sm:col-span-2 sm:h-[400px]' : 'h-[250px]'}`}
                                     >
-                                        <img src={item.url} alt={item.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                                        <Image src={item.url} alt={item.title} fill className="object-cover transition-transform duration-700 group-hover:scale-105" />
 
                                         {/* Hover Overlay */}
                                         <div className="absolute inset-0 bg-stone-900/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center p-6 text-center">

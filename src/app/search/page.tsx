@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Search, MapPin, Star, SlidersHorizontal, ChevronDown, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 import { Header } from "@/components/Header";
 import { createClient } from "@/utils/supabase/client";
 
@@ -249,7 +250,6 @@ export default function SearchPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
                         {filteredCreators.map((creator) => (
                             <motion.div
-                                layout
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
@@ -260,7 +260,7 @@ export default function SearchPage() {
                             >
                                 {/* Img Header */}
                                 <div className="h-48 relative overflow-hidden bg-stone-100 flex-shrink-0">
-                                    <img src={creator.image} alt={creator.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                    <Image src={creator.image} alt={creator.name} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
                                     {creator.verified && (
                                         <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-green-700 flex items-center gap-1 shadow-sm">
                                             <CheckCircle className="w-3.5 h-3.5" /> Verified
