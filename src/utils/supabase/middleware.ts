@@ -37,14 +37,32 @@ export async function updateSession(request: NextRequest) {
 
     // Protect dashboard routes
     // Redirect to login if a user tries to access /dashboard or /creator-dashboard without being logged in
-    if (
-        !user &&
-        (request.nextUrl.pathname.startsWith('/dashboard') ||
-            request.nextUrl.pathname.startsWith('/creator-dashboard'))
-    ) {
+    const isDashboardPath = request.nextUrl.pathname.startsWith('/dashboard')
+    const isCreatorDashboardPath = request.nextUrl.pathname.startsWith('/creator-dashboard')
+
+    if (!user && (isDashboardPath || isCreatorDashboardPath)) {
         const url = request.nextUrl.clone()
         url.pathname = '/login'
         return NextResponse.redirect(url)
+    }
+
+    // Role-Based Access Control
+    if (user && (isDashboardPath || isCreatorDashboardPath)) {
+        const accountType = user.user_metadata?.account_type
+
+        // If a client tries to access creator dashboard, bounce them to client dashboard
+        if (isCreatorDashboardPath && accountType !== 'creator') {
+            const url = request.nextUrl.clone()
+            url.pathname = '/dashboard'
+            return NextResponse.redirect(url)
+        }
+
+        // If a creator tries to access client dashboard, bounce them to creator dashboard
+        if (isDashboardPath && accountType === 'creator') {
+            const url = request.nextUrl.clone()
+            url.pathname = '/creator-dashboard'
+            return NextResponse.redirect(url)
+        }
     }
 
     return supabaseResponse

@@ -14,14 +14,23 @@ export async function login(formData: FormData) {
         password: formData.get('password') as string,
     }
 
-    const { error } = await supabase.auth.signInWithPassword(data)
+    const { data: { session }, error } = await supabase.auth.signInWithPassword(data)
 
-    if (error) {
+    if (error || !session) {
         redirect('/login?error=Could not authenticate user')
     }
 
     revalidatePath('/', 'layout')
-    redirect('/dashboard') // Default redirect, can be handled dynamically later
+
+    // Role-based routing
+    const accountType = session.user.user_metadata?.account_type
+
+    if (accountType === 'creator') {
+        redirect('/creator-dashboard')
+    } else {
+        // Default to client dashboard
+        redirect('/dashboard')
+    }
 }
 
 export async function signup(formData: FormData, accountType: string) {
