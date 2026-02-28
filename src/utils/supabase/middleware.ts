@@ -46,6 +46,15 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url)
     }
 
+    const isAuthPath = request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup'
+
+    if (user && isAuthPath) {
+        const accountType = user.user_metadata?.account_type
+        const url = request.nextUrl.clone()
+        url.pathname = accountType === 'creator' ? '/creator-dashboard' : '/dashboard'
+        return NextResponse.redirect(url)
+    }
+
     // Role-Based Access Control
     if (user && (isDashboardPath || isCreatorDashboardPath)) {
         const accountType = user.user_metadata?.account_type
