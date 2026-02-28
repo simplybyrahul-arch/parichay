@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import {
     LayoutDashboard,
     Briefcase,
@@ -31,9 +32,23 @@ export default function Dashboard() {
     const supabase = createClient();
     const router = useRouter();
 
-    // Data State
-    const [projects, setProjects] = useState<Record<string, any>[]>([]);
-    const [loading, setLoading] = useState(true);
+    // Data State using SWR for caching
+    const fetcher = async (uid: string) => {
+        const { data, error } = await supabase
+            .from('projects')
+            .select('*')
+            .eq('client_id', uid)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    };
+
+    const { data: projects = [], isValidating: loading, mutate } = useSWR(
+        userId ? ['projects', userId] : null,
+        ([, uid]) => fetcher(uid as string)
+    );
+
     const [isFunding, setIsFunding] = useState<string | null>(null);
 
     useEffect(() => {
@@ -42,32 +57,13 @@ export default function Dashboard() {
             if (user) {
                 setUserEmail(user.email ?? "User");
                 setUserId(user.id);
-                fetchProjects(user.id);
             } else {
                 setUserEmail("Unknown User");
                 router.push("/login");
             }
         };
         fetchUserData();
-    }, [supabase]);
-
-    const fetchProjects = async (uid: string) => {
-        try {
-            setLoading(true);
-            const { data, error } = await supabase
-                .from('projects')
-                .select('*')
-                .eq('client_id', uid)
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            if (data) setProjects(data);
-        } catch (err) {
-            console.error("Error fetching projects:", err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    }, [supabase, router]);
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
@@ -119,7 +115,7 @@ export default function Dashboard() {
 
                     if (verifyRes.ok && verifyData.success) {
                         toast.success("Successfully funded Escrow! Developer will be notified.", { id: toastId });
-                        fetchProjects(userId!); // refresh
+                        mutate(); // refresh data via SWR
                     } else {
                         toast.error(verifyData.error || "Verification failed", { id: toastId });
                     }

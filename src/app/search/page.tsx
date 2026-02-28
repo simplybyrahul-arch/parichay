@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { Search, MapPin, Star, SlidersHorizontal, ChevronDown, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
@@ -54,60 +55,56 @@ export default function SearchPage() {
     const [selectedRole, setSelectedRole] = useState("All Roles");
     const [maxRate, setMaxRate] = useState(50000);
     const [showFilters, setShowFilters] = useState(false);
-
-    // Database State
-    const [creators, setCreators] = useState(mockCreators);
-    const [loading, setLoading] = useState(true);
     const supabase = createClient();
 
-    useEffect(() => {
-        const fetchCreators = async () => {
-            try {
-                // Fetch creators and join with users to get full_name
-                const { data, error } = await supabase
-                    .from('creators')
-                    .select(`
-                        id,
-                        role,
-                        location,
-                        day_rate,
-                        verified,
-                        tags,
-                        profile_image_url,
-                        users ( full_name )
-                    `);
+    // SWR Data Fetcher
+    const fetchCreators = async () => {
+        // Fetch creators and join with users to get full_name
+        const { data, error } = await supabase
+            .from('creators')
+            .select(`
+                id,
+                role,
+                location,
+                day_rate,
+                verified,
+                tags,
+                profile_image_url,
+                users ( full_name )
+            `);
 
-                if (data && data.length > 0) {
-                    // Map Supabase data to component structure
-                    const formatted = data.map((c: Record<string, unknown>) => ({
-                        id: c.id as string,
-                        name: (c.users as { full_name?: string })?.full_name || "Unknown Creator",
-                        role: c.role as string,
-                        location: c.location as string,
-                        rating: 5.0, // Mock rating for now
-                        reviews: 0,
-                        rate: Number(c.day_rate) || 0,
-                        verified: Boolean(c.verified),
-                        image: (c.profile_image_url as string) || "https://images.unsplash.com/photo-1542385262-cea6e8a4bb2a?w=400&q=80",
-                        tags: (c.tags as string[]) || []
-                    }));
-                    setCreators(formatted);
-                } else {
-                    // Fallback to mock data if database is empty (for presentation)
-                    setCreators(mockCreators);
-                }
-            } catch (err) {
-                console.error("Error fetching creators:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
+        if (error) throw error;
 
-        fetchCreators();
-    }, [supabase]);
+        if (data && data.length > 0) {
+            // Map Supabase data to component structure
+            return data.map((c: Record<string, unknown>) => ({
+                id: c.id as string,
+                name: (c.users as { full_name?: string })?.full_name || "Unknown Creator",
+                role: c.role as string,
+                location: c.location as string,
+                rating: 5.0, // Mock rating for now
+                reviews: 0,
+                rate: Number(c.day_rate) || 0,
+                verified: Boolean(c.verified),
+                image: (c.profile_image_url as string) || "https://images.unsplash.com/photo-1542385262-cea6e8a4bb2a?w=400&q=80",
+                tags: (c.tags as string[]) || []
+            }));
+        } else {
+            // Fallback to mock data if database is empty (for presentation)
+            return mockCreators;
+        }
+    };
+
+    const { data: creators = mockCreators, isValidating: loading } = useSWR(
+        'search-creators',
+        fetchCreators,
+        {
+            fallbackData: mockCreators
+        }
+    );
 
     // Filter Logic
-    const filteredCreators = creators.filter(creator => {
+    const filteredCreators = creators.filter((creator: any) => {
         const matchesQuery = creator.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (creator.tags && creator.tags.some((tag: string) => tag.toLowerCase().includes(searchQuery.toLowerCase())));
         const matchesRole = selectedRole === "All Roles" || creator.role === selectedRole;
@@ -248,7 +245,7 @@ export default function SearchPage() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-                        {filteredCreators.map((creator) => (
+                        {filteredCreators.map((creator: any) => (
                             <motion.div
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}

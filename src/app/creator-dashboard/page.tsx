@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import {
     LayoutDashboard,
     Wallet,
@@ -36,14 +37,76 @@ export default function CreatorDashboard() {
     const supabase = createClient();
     const router = useRouter();
 
-    // Data State
-    const [requests, setRequests] = useState<{ id: string, client: string, type: string, role: string, date: string, budget: string, status: string, timeAgo: string }[]>([]);
-    const [loading, setLoading] = useState(true);
+    // Data fetcher for requests
+    const fetchRequests = async () => {
+        // Fetching all pending projects to simulate an open marketplace inbox for the MVP MVP
+        // In a real app, this would specifically target creator_id = uid
+        const { data, error } = await supabase
+            .from('projects')
+            .select(`
+                id, 
+                title, 
+                description, 
+                budget, 
+                status, 
+                created_at,
+                users!client_id(full_name)
+            `)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (data) {
+            // Formatting data to match the UI expectation
+            return data.map(req => {
+                const clientName = Array.isArray(req.users)
+                    ? (req.users[0] as { full_name?: string })?.full_name
+                    : (req.users as { full_name?: string })?.full_name;
+
+                return {
+                    id: req.id,
+                    client: clientName || "Unknown Client",
+                    type: req.title,
+                    role: req.description,
+                    date: new Date(req.created_at).toLocaleDateString(),
+                    budget: `₹${req.budget.toLocaleString()}`,
+                    status: req.status === 'pending' ? 'New Request' : req.status,
+                    timeAgo: 'Just now'
+                };
+            });
+        }
+        return [];
+    };
+
+    // Data fetcher for profile
+    const fetchProfileData = async (uid: string) => {
+        const { data, error } = await supabase.from('creators').select('bio, location, day_rate').eq('id', uid).single();
+        if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "Row not found"
+        return data || { bio: "", location: "", day_rate: 0 };
+    };
 
     // Editor Profile State
     const [bio, setBio] = useState("");
     const [location, setLocation] = useState("");
     const [dayRate, setDayRate] = useState<number | string>(0);
+
+    // SWR Hooks
+    const { data: requests = [], isValidating: loading, mutate: mutateRequests } = useSWR(
+        userId ? ['creator-requests'] : null,
+        fetchRequests
+    );
+
+    const { data: profile } = useSWR(
+        userId ? ['creator-profile', userId] : null,
+        ([, uid]) => fetchProfileData(uid as string),
+        {
+            onSuccess: (data) => {
+                setBio(data.bio);
+                setLocation(data.location);
+                setDayRate(data.day_rate);
+            }
+        }
+    );
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -51,8 +114,6 @@ export default function CreatorDashboard() {
             if (user) {
                 setUserEmail(user.email ?? "User");
                 setUserId(user.id);
-                fetchRequests(user.id);
-                fetchProfileData(user.id);
             } else {
                 setUserEmail("Unknown User");
                 router.push("/login");
@@ -60,61 +121,6 @@ export default function CreatorDashboard() {
         };
         fetchUserData();
     }, [supabase, router]);
-
-    const fetchProfileData = async (uid: string) => {
-        const { data, error } = await supabase.from('creators').select('bio, location, day_rate').eq('id', uid).single();
-        if (data) {
-            setBio(data.bio || "");
-            setLocation(data.location || "");
-            setDayRate(data.day_rate || 0);
-        }
-    };
-
-    const fetchRequests = async (uid: string) => {
-        try {
-            setLoading(true);
-            // Fetching all pending projects to simulate an open marketplace inbox for the MVP MVP
-            // In a real app, this would specifically target creator_id = uid
-            const { data, error } = await supabase
-                .from('projects')
-                .select(`
-                    id, 
-                    title, 
-                    description, 
-                    budget, 
-                    status, 
-                    created_at,
-                    users!client_id(full_name)
-                `)
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            if (data) {
-                // Formatting data to match the UI expectation
-                const formatted = data.map(req => {
-                    const clientName = Array.isArray(req.users)
-                        ? (req.users[0] as { full_name?: string })?.full_name
-                        : (req.users as { full_name?: string })?.full_name;
-
-                    return {
-                        id: req.id,
-                        client: clientName || "Unknown Client",
-                        type: req.title,
-                        role: req.description, // We packed the roles into the description in the booking flow
-                        date: new Date(req.created_at).toLocaleDateString(),
-                        budget: `₹${req.budget.toLocaleString()}`,
-                        status: req.status === 'pending' ? 'New Request' : req.status,
-                        timeAgo: 'Just now'
-                    };
-                });
-                setRequests(formatted);
-            }
-        } catch (err) {
-            console.error("Error fetching requests:", err);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
@@ -138,7 +144,7 @@ export default function CreatorDashboard() {
         toast.promise(updatePromise, {
             loading: 'Accepting request...',
             success: () => {
-                fetchRequests(userId); // Refresh list
+                mutateRequests(); // Refresh list via SWR
                 return 'Request accepted successfully!';
             },
             error: 'Failed to accept request'
