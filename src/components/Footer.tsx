@@ -21,12 +21,14 @@ export const Footer = () => {
 
                         <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto relative group">
                             <input
+                                suppressHydrationWarning
                                 type="email"
                                 placeholder="Enter your email"
                                 className="flex-grow px-6 py-4 rounded-full bg-stone-50 border border-stone-200 text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 transition-all shadow-sm"
                                 required
                             />
                             <button
+                                suppressHydrationWarning
                                 type="submit"
                                 className="px-8 py-4 bg-stone-900 text-white font-bold rounded-full hover:bg-stone-800 transition-all flex items-center justify-center gap-2"
                             >

@@ -53,6 +53,7 @@ export const FAQ = () => {
                                     }`}
                             >
                                 <button
+                                    suppressHydrationWarning
                                     onClick={() => setOpenIndex(isOpen ? null : index)}
                                     className="w-full px-6 py-6 flex items-center justify-between text-left gap-4"
                                 >
