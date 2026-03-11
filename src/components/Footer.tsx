@@ -1,5 +1,7 @@
 "use client";
 import { ArrowRight, Twitter, Instagram, Linkedin, Globe } from "lucide-react";
+import { BrandLogo } from "./BrandLogo";
+import Link from "next/link";
 
 export const Footer = () => {
     return (
@@ -16,7 +18,7 @@ export const Footer = () => {
                             <span className="text-gradient from-orange-600 to-rose-500">production process?</span>
                         </h2>
                         <p className="text-stone-600 text-lg mb-8 font-medium">
-                            Join thousands of verified creators and agencies building the future of media production on Parichay.
+                            Join thousands of verified creators and agencies building the future of media production on ShotcutCrew.
                         </p>
 
                         <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto relative group">
@@ -42,50 +44,52 @@ export const Footer = () => {
                 {/* Main Footer Links */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 lg:gap-12 mb-16">
                     <div className="col-span-2 lg:col-span-2">
-                        <h3 className="text-2xl font-black tracking-tighter text-stone-900 mb-6 font-display">PARICHAY.</h3>
+                        <div className="mb-6">
+                            <BrandLogo href="/" width={220} height={62} className="h-auto w-[180px] md:w-[220px]" />
+                        </div>
                         <p className="text-stone-500 leading-relaxed max-w-xs mb-8">
                             The AI-enabled marketplace connecting visionary brands with world-class creative talent.
                         </p>
                         <div className="flex items-center gap-4">
-                            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-orange-500 transition-colors"><Twitter className="w-5 h-5" /></a>
-                            <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="hover:text-orange-500 transition-colors"><Instagram className="w-5 h-5" /></a>
-                            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-orange-500 transition-colors"><Linkedin className="w-5 h-5" /></a>
+                            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" title="Twitter" aria-label="Twitter" className="hover:text-orange-500 transition-colors"><Twitter className="w-5 h-5" /></a>
+                            <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" title="Instagram" aria-label="Instagram" className="hover:text-orange-500 transition-colors"><Instagram className="w-5 h-5" /></a>
+                            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" title="LinkedIn" aria-label="LinkedIn" className="hover:text-orange-500 transition-colors"><Linkedin className="w-5 h-5" /></a>
                         </div>
                     </div>
 
                     <div>
                         <h4 className="font-bold text-stone-900 mb-4 tracking-wide font-display">Platform</h4>
                         <ul className="space-y-3">
-                            <li><a href="#" className="text-stone-500 hover:text-orange-600 transition-colors">Quick Booking</a></li>
-                            <li><a href="#" className="text-stone-500 hover:text-orange-600 transition-colors">Builder Mode</a></li>
-                            <li><a href="#" className="text-stone-500 hover:text-orange-600 transition-colors">AI Matchmaking</a></li>
-                            <li><a href="#" className="text-stone-500 hover:text-orange-600 transition-colors">Pricing</a></li>
+                            <li><Link href="/book" className="text-stone-500 hover:text-orange-600 transition-colors">Quick Booking</Link></li>
+                            <li><Link href="/book" className="text-stone-500 hover:text-orange-600 transition-colors">Builder Mode</Link></li>
+                            <li><Link href="/search" className="text-stone-500 hover:text-orange-600 transition-colors">AI Matchmaking</Link></li>
+                            <li><Link href="/pricing" className="text-stone-500 hover:text-orange-600 transition-colors">Pricing</Link></li>
                         </ul>
                     </div>
 
                     <div>
                         <h4 className="font-bold text-stone-900 mb-4 tracking-wide font-display">Company</h4>
                         <ul className="space-y-3">
-                            <li><a href="#" className="text-stone-500 hover:text-orange-600 transition-colors">About Us</a></li>
-                            <li><a href="#" className="text-stone-500 hover:text-orange-600 transition-colors">Careers</a></li>
-                            <li><a href="#" className="text-stone-500 hover:text-orange-600 transition-colors">Blog</a></li>
-                            <li><a href="#" className="text-stone-500 hover:text-orange-600 transition-colors">Contact</a></li>
+                            <li><Link href="/about" className="text-stone-500 hover:text-orange-600 transition-colors">About Us</Link></li>
+                            <li><Link href="/careers" className="text-stone-500 hover:text-orange-600 transition-colors">Careers</Link></li>
+                            <li><Link href="/blog" className="text-stone-500 hover:text-orange-600 transition-colors">Blog</Link></li>
+                            <li><Link href="/contact" className="text-stone-500 hover:text-orange-600 transition-colors">Contact</Link></li>
                         </ul>
                     </div>
 
                     <div>
                         <h4 className="font-bold text-stone-900 mb-4 tracking-wide font-display">Legal</h4>
                         <ul className="space-y-3">
-                            <li><a href="#" className="text-stone-500 hover:text-orange-600 transition-colors">Terms of Service</a></li>
-                            <li><a href="#" className="text-stone-500 hover:text-orange-600 transition-colors">Privacy Policy</a></li>
-                            <li><a href="#" className="text-stone-500 hover:text-orange-600 transition-colors">Cookie Policy</a></li>
+                            <li><Link href="/terms" className="text-stone-500 hover:text-orange-600 transition-colors">Terms of Service</Link></li>
+                            <li><Link href="/privacy" className="text-stone-500 hover:text-orange-600 transition-colors">Privacy Policy</Link></li>
+                            <li><Link href="/cookies" className="text-stone-500 hover:text-orange-600 transition-colors">Cookie Policy</Link></li>
                         </ul>
                     </div>
                 </div>
 
                 {/* Copyright */}
                 <div className="pt-8 border-t border-stone-200 flex flex-col md:flex-row items-center justify-between text-stone-400 text-sm gap-4">
-                    <p>© {new Date().getFullYear()} Parichay Production Pvt Ltd. All rights reserved.</p>
+                    <p>© {new Date().getFullYear()} ShotcutCrew. All rights reserved.</p>
                     <div className="flex gap-6">
                         <span className="flex items-center gap-1.5 hover:text-stone-700 cursor-pointer transition-colors">
                             <Globe className="w-4 h-4" />

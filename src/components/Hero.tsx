@@ -1,6 +1,7 @@
 "use client";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export const Hero = () => {
     return (
@@ -67,20 +68,20 @@ export const Hero = () => {
                     transition={{ duration: 0.5, delay: 0.3 }}
                     className="flex flex-col sm:flex-row items-center justify-center gap-5 w-full sm:w-auto"
                 >
-                    <button
-                        onClick={() => window.location.href = '/book'}
+                    <Link
+                        href="/book"
                         className="w-full sm:w-auto px-8 py-4 bg-orange-600 text-white font-bold text-lg rounded-full hover:bg-orange-700 transition-all flex items-center justify-center gap-2 group hover:scale-105 active:scale-95 shadow-xl shadow-orange-500/20"
                     >
                         <Sparkles className="w-5 h-5 text-orange-200" />
                         Book a Crew
-                    </button>
-                    <button
-                        onClick={() => window.location.href = '/signup'}
+                    </Link>
+                    <Link
+                        href="/signup"
                         className="w-full sm:w-auto px-8 py-4 bg-white/60 backdrop-blur-md border border-stone-200 text-stone-900 font-bold text-lg rounded-full hover:bg-white hover:border-stone-300 transition-all flex items-center justify-center gap-2 group hover:scale-105 active:scale-95 shadow-lg"
                     >
-                        Join as a Creator
+                        Join
                         <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </button>
+                    </Link>
                 </motion.div>
             </div>
         </section>

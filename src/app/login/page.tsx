@@ -5,6 +5,7 @@ import { ArrowRight, Mail, Lock, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { login } from "../actions/auth";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export default function LoginPage() {
     const [email, setEmail] = useState("");
@@ -42,9 +43,9 @@ export default function LoginPage() {
                 className="w-full max-w-md bg-white p-8 md:p-10 rounded-[2rem] shadow-2xl shadow-stone-200/50 border border-stone-100 relative z-10"
             >
                 <div className="text-center mb-10">
-                    <Link href="/" className="inline-block mb-8">
-                        <div className="font-display font-black text-3xl tracking-tight text-stone-900">PARICHAY.</div>
-                    </Link>
+                    <div className="inline-block mb-8">
+                        <BrandLogo href="/" width={220} height={64} className="h-auto w-[180px] md:w-[220px]" priority />
+                    </div>
                     <h1 className="text-2xl lg:text-3xl font-black tracking-tight text-stone-900 mb-2 font-display">
                         Welcome back
                     </h1>

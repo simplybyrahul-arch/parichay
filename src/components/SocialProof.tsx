@@ -4,7 +4,7 @@ import { Sparkles, Trophy, Star, CheckCircle, Flame, Shield, Heart } from "lucid
 // Assuming these are the brands we want to show based on the previous generic strings
 // Updated to objects to match the component map logic while safely displaying an icon
 const brands = [
-    { name: "Verified Parichay Creators", icon: <CheckCircle className="w-5 h-5 text-green-500" /> },
+    { name: "Verified ShotcutCrew Creators", icon: <CheckCircle className="w-5 h-5 text-green-500" /> },
     { name: "Leading Design Agencies", icon: <Star className="w-5 h-5 text-yellow-500" /> },
     { name: "Top-Tier Production Houses", icon: <Trophy className="w-5 h-5 text-orange-500" /> },
     { name: "Award Winning DOPs", icon: <Flame className="w-5 h-5 text-orange-500" /> },

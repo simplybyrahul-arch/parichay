@@ -33,7 +33,7 @@ export async function login(formData: FormData) {
     }
 }
 
-export async function signup(formData: FormData, accountType: string) {
+export async function signup(formData: FormData, accountType: string, creatorType?: string) {
     const supabase = await createClient()
 
     const data = {
@@ -43,6 +43,7 @@ export async function signup(formData: FormData, accountType: string) {
             data: {
                 full_name: formData.get('name') as string,
                 account_type: accountType,
+                ...(creatorType ? { creator_type: creatorType } : {}),
             }
         }
     }
@@ -59,4 +60,11 @@ export async function signup(formData: FormData, accountType: string) {
     } else {
         redirect('/dashboard')
     }
+}
+
+export async function logout() {
+    const supabase = await createClient()
+    await supabase.auth.signOut()
+    revalidatePath('/', 'layout')
+    redirect('/login')
 }

@@ -3,6 +3,8 @@
 import { Star, MapPin, CheckCircle, Video, Play, Award, Zap, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import Image from "next/image";
+import Link from "next/link";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export default function CreatorProfileClient({ creator }: { creator: Record<string, any> }) {
     return (
@@ -19,14 +21,15 @@ export default function CreatorProfileClient({ creator }: { creator: Record<stri
                 />
                 {/* Navigation Bar integration area (transparent) */}
                 <div className="absolute top-0 w-full p-6 z-20 flex justify-between items-center text-white">
-                    {/* Logo placeholder */}
-                    <div className="font-display font-black text-2xl tracking-tight">PARICHAY.</div>
-                    <button
-                        onClick={() => window.location.href = '/dashboard'}
+                    <div className="bg-white/90 rounded-xl px-3 py-2 shadow-sm">
+                        <BrandLogo href="/" width={160} height={46} className="h-auto w-[130px] md:w-[160px]" priority />
+                    </div>
+                    <Link
+                        href="/dashboard"
                         className="px-5 py-2 backdrop-blur-md bg-white/20 hover:bg-white/30 rounded-full font-medium transition-colors text-sm border border-white/30 hidden sm:block"
                     >
                         Back to Search
-                    </button>
+                    </Link>
                 </div>
             </div>
 
@@ -90,16 +93,16 @@ export default function CreatorProfileClient({ creator }: { creator: Record<stri
                             </div>
 
                             {/* Booking CTA (Sticky conceptually on mobile) */}
-                            <button
-                                onClick={() => window.location.href = '/book'}
+                            <Link
+                                href="/book"
                                 className="w-full py-4 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 active:scale-95"
                             >
                                 <Zap className="w-5 h-5" />
                                 Request to Book
-                            </button>
+                            </Link>
                             <div className="mt-4 flex items-center justify-center gap-2 text-stone-400 text-xs font-medium">
                                 <Shield className="w-4 h-4" />
-                                Payments protected by Parichay Escrow
+                                Payments protected by ShotcutCrew Escrow
                             </div>
                         </motion.div>
 

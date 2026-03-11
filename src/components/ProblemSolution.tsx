@@ -1,6 +1,7 @@
 "use client";
 import { XCircle, CheckCircle, ChevronRight, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export const ProblemSolution = () => {
     return (
@@ -53,7 +54,7 @@ export const ProblemSolution = () => {
                         </ul>
                     </motion.div>
 
-                    {/* The Parichay Way */}
+                    {/* The ShotcutCrew Way */}
                     <motion.div
                         initial={{ opacity: 0, x: 30 }}
                         whileInView={{ opacity: 1, x: 0 }}
@@ -67,7 +68,7 @@ export const ProblemSolution = () => {
                             <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mb-8 border border-orange-200 shadow-sm">
                                 <CheckCircle className="w-8 h-8" strokeWidth={2} />
                             </div>
-                            <h3 className="text-3xl font-bold mb-8 text-stone-900 tracking-tight font-display">The Parichay Way</h3>
+                            <h3 className="text-3xl font-bold mb-8 text-stone-900 tracking-tight font-display">The ShotcutCrew Way</h3>
                             <ul className="space-y-6 flex-grow">
                                 {[
                                     "Quick Booking Mode for instant staffing",
@@ -83,12 +84,12 @@ export const ProblemSolution = () => {
                             </ul>
 
                             <div className="mt-12 pt-8 border-t border-stone-100">
-                                <button
-                                    onClick={() => window.location.href = '/book'}
+                                <Link
+                                    href="/book"
                                     className="flex items-center gap-2 text-orange-600 font-semibold hover:text-orange-500 transition-colors group/btn"
                                 >
                                     Find your crew <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-                                </button>
+                                </Link>
                             </div>
                         </div>
                     </motion.div>

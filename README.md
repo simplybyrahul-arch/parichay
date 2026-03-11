@@ -1,36 +1,109 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ShotcutCrew
 
-## Getting Started
+ShotcutCrew is an AI-enabled creative production marketplace built with Next.js App Router and Supabase.
 
-First, run the development server:
+It supports:
+- Role-based auth (Client vs Creator)
+- Creator subtype flow (Studio Owner vs Freelancer)
+- Booking flows (Quick Booking, Build Your Crew, Equipment Booking)
+- Script upload and no-key local AI-style requirement analysis
+- Client and creator dashboards
+- Escrow flow via Razorpay APIs
+
+## Tech Stack
+
+- Next.js 16 (App Router)
+- TypeScript
+- Tailwind CSS
+- Supabase (auth + database)
+- SWR (data fetching)
+- Framer Motion (UI animation)
+- Razorpay (escrow funding integration)
+
+## Project Structure
+
+- `src/app/*`: Routes, layouts, pages, and API handlers
+- `src/components/*`: Shared UI components
+- `src/utils/supabase/*`: Client/server Supabase helpers
+- `supabase/*.sql`: Database migration scripts
+- `docs/*`: Product, API, and implementation documentation
+
+## Local Development
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Configure environment variables in `.env.local`:
+
+```bash
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+NEXT_PUBLIC_RAZORPAY_KEY_ID=...
+RAZORPAY_KEY_SECRET=...
+```
+
+3. Run dev server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Production build check:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Booking Modes
 
-## Learn More
+### Quick Booking
 
-To learn more about Next.js, take a look at the following resources:
+Flow order:
+1. Event Type
+2. Photographer/Videographer Count
+3. Date
+4. Budget (slider + fixed budget option)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Build Your Crew
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Custom role-based crew builder with per-day pricing and duration multiplier.
 
-## Deploy on Vercel
+### Equipment Booking
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Standalone equipment rental path for users who only need gear.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Script Analysis
+
+`/api/ai/analyze` uses a local keyword/rule engine (no external AI API key required) to infer:
+- Recommended roles
+- Suggested equipment
+- Production requirements
+- Estimated duration
+
+## Creator Profile Validation Rules
+
+Validated in creator dashboard save flow:
+- `studio_owner`: location required + portfolio URL required
+- `freelancer`: portfolio URL required
+
+## Branding
+
+Branding has been updated from older naming to **ShotcutCrew** across metadata, pages, labels, and logos.
+
+## Important Notes
+
+- If you see hydration mismatch warnings showing `fdprocessedid`, that is usually extension-injected DOM mutation. Targeted suppression is implemented in dashboard controls.
+- Next.js warns that `middleware.ts` convention is deprecated in favor of `proxy` for newer versions.
+
+## Documentation Index
+
+- `docs/CLIENT_CHANGE_VERIFICATION.md`
+- `docs/FEATURES.md`
+- `docs/API.md`
+- `docs/DEPLOYMENT.md`
+

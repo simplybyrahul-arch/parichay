@@ -26,6 +26,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
+import { logout } from "../actions/auth";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export default function CreatorDashboard() {
     const [activeTab, setActiveTab] = useState("overview");
@@ -34,13 +36,28 @@ export default function CreatorDashboard() {
     // Auth State
     const [userEmail, setUserEmail] = useState<string | null>("Loading...");
     const [userId, setUserId] = useState<string | null>(null);
+        const [creatorType, setCreatorType] = useState<string | null>(null);
     const supabase = createClient();
     const router = useRouter();
 
+    const getRelativeTime = (value: string) => {
+        const then = new Date(value).getTime();
+        const now = Date.now();
+        const diff = Math.max(0, now - then);
+        const minutes = Math.floor(diff / 60000);
+        if (minutes < 1) return "Just now";
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        if (days < 7) return `${days}d ago`;
+        return new Date(value).toLocaleDateString();
+    };
+
     // Data fetcher for requests
     const fetchRequests = async () => {
-        // Fetching all pending projects to simulate an open marketplace inbox for the MVP MVP
-        // In a real app, this would specifically target creator_id = uid
+        if (!userId) return [];
+
         const { data, error } = await supabase
             .from('projects')
             .select(`
@@ -52,6 +69,7 @@ export default function CreatorDashboard() {
                 created_at,
                 users!client_id(full_name)
             `)
+            .eq('creator_id', userId)
             .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -71,7 +89,7 @@ export default function CreatorDashboard() {
                     date: new Date(req.created_at).toLocaleDateString(),
                     budget: `₹${req.budget.toLocaleString()}`,
                     status: req.status === 'pending' ? 'New Request' : req.status,
-                    timeAgo: 'Just now'
+                    timeAgo: getRelativeTime(req.created_at)
                 };
             });
         }
@@ -80,19 +98,20 @@ export default function CreatorDashboard() {
 
     // Data fetcher for profile
     const fetchProfileData = async (uid: string) => {
-        const { data, error } = await supabase.from('creators').select('bio, location, day_rate').eq('id', uid).single();
+        const { data, error } = await supabase.from('creators').select('bio, location, day_rate, portfolio_url, verified').eq('id', uid).single();
         if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "Row not found"
-        return data || { bio: "", location: "", day_rate: 0 };
+        return data || { bio: "", location: "", day_rate: 0, portfolio_url: "", verified: false };
     };
 
     // Editor Profile State
     const [bio, setBio] = useState("");
     const [location, setLocation] = useState("");
     const [dayRate, setDayRate] = useState<number | string>(0);
+    const [portfolioUrl, setPortfolioUrl] = useState("");
 
     // SWR Hooks
     const { data: requests = [], isValidating: loading, mutate: mutateRequests } = useSWR(
-        userId ? ['creator-requests'] : null,
+        userId ? ['creator-requests', userId] : null,
         fetchRequests
     );
 
@@ -104,6 +123,7 @@ export default function CreatorDashboard() {
                 setBio(data.bio);
                 setLocation(data.location);
                 setDayRate(data.day_rate);
+                setPortfolioUrl(data.portfolio_url || "");
             }
         }
     );
@@ -114,6 +134,7 @@ export default function CreatorDashboard() {
             if (user) {
                 setUserEmail(user.email ?? "User");
                 setUserId(user.id);
+                setCreatorType(user.user_metadata?.creator_type || null);
             } else {
                 setUserEmail("Unknown User");
                 router.push("/login");
@@ -123,8 +144,7 @@ export default function CreatorDashboard() {
     }, [supabase, router]);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
-        router.push("/login");
+        await logout();
     };
 
     const handleAcceptRequest = async (id: string) => {
@@ -154,6 +174,23 @@ export default function CreatorDashboard() {
     const handleSaveProfile = async () => {
         if (!userId) return;
 
+        // Mandatory field validation based on creator_type
+        if (creatorType === 'studio_owner') {
+            if (!location.trim()) {
+                toast.error("Location / Address is required for Studio profiles.");
+                return;
+            }
+            if (!portfolioUrl.trim()) {
+                toast.error("Portfolio URL is required for Studio profiles.");
+                return;
+            }
+        } else if (creatorType === 'freelancer') {
+            if (!portfolioUrl.trim()) {
+                toast.error("Portfolio URL is required for Freelancer profiles.");
+                return;
+            }
+        }
+
         const updatePromise = new Promise(async (resolve, reject) => {
             // Check if profile exists
             const { data: existing } = await supabase.from('creators').select('id').eq('id', userId).single();
@@ -164,7 +201,8 @@ export default function CreatorDashboard() {
                 const { error } = await supabase.from('creators').update({
                     bio,
                     location,
-                    day_rate: numDayRate
+                    day_rate: numDayRate,
+                    portfolio_url: portfolioUrl
                 }).eq('id', userId);
 
                 if (error) reject(error);
@@ -177,7 +215,8 @@ export default function CreatorDashboard() {
                     role: "Creator", // Default fallback
                     bio,
                     location: location || "Remote",
-                    day_rate: numDayRate
+                    day_rate: numDayRate,
+                    portfolio_url: portfolioUrl
                 });
 
                 if (error) reject(error);
@@ -198,8 +237,8 @@ export default function CreatorDashboard() {
                 onClick={() => router.push('/')}
                 className="p-6 border-b border-stone-100 cursor-pointer flex justify-between items-center"
             >
-                <div className="font-display font-black text-2xl tracking-tight text-stone-900">PARICHAY.</div>
-                <button className="md:hidden text-stone-400" onClick={() => setMobileMenuOpen(false)}>
+                <BrandLogo href="/" width={170} height={50} className="h-auto w-[140px] md:w-[170px]" priority />
+                <button aria-label="Close sidebar" title="Close sidebar" className="md:hidden text-stone-400" onClick={() => setMobileMenuOpen(false)}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
                 </button>
             </div>
@@ -315,7 +354,7 @@ export default function CreatorDashboard() {
                 <header className="h-20 bg-white/80 backdrop-blur-md border-b border-stone-100 flex items-center justify-between px-6 sticky top-0 z-20">
                     <div className="flex items-center gap-4 flex-1">
                         {/* Mobile Menu Toggle */}
-                        <button onClick={() => setMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-stone-600 hover:bg-stone-100 rounded-lg">
+                        <button aria-label="Open sidebar" title="Open sidebar" onClick={() => setMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-stone-600 hover:bg-stone-100 rounded-lg">
                             <MoreVertical className="w-5 h-5" />
                         </button>
 
@@ -331,6 +370,8 @@ export default function CreatorDashboard() {
 
                     <div className="flex items-center gap-4">
                         <button
+                            aria-label="Open notifications"
+                            title="Open notifications"
                             onClick={() => setActiveTab("notifications")}
                             className="w-10 h-10 rounded-full bg-stone-50 border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-100 transition-colors relative"
                         >
@@ -366,10 +407,18 @@ export default function CreatorDashboard() {
 
                                 {/* Quick Stats Grid */}
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                    <StatCard title="Total Earnings" value="₹0" trend="New Account" icon={<Wallet className="w-5 h-5 text-green-600" />} />
-                                    <StatCard title="Profile Views" value="842" trend="+112 this week" icon={<Camera className="w-5 h-5 text-rose-600" />} />
-                                    <StatCard title="Jobs Completed" value="0" trend="Awaiting first job" icon={<CheckCircle className="w-5 h-5 text-blue-600" />} />
-                                    <StatCard title="Trust Score" value="5.0" trend="Starting reputation" icon={<Star className="w-5 h-5 text-amber-500" />} />
+                                    <StatCard
+                                        title="Total Earnings"
+                                        value={`₹${requests
+                                            .filter(r => r.status === 'completed')
+                                            .reduce((sum, r) => sum + Number((r.budget as string).replace(/[^0-9]/g, '')), 0)
+                                            .toLocaleString()}`}
+                                        trend="Captured from completed jobs"
+                                        icon={<Wallet className="w-5 h-5 text-green-600" />}
+                                    />
+                                    <StatCard title="Profile Views" value="-" trend="Not tracked in current schema" icon={<Camera className="w-5 h-5 text-rose-600" />} />
+                                    <StatCard title="Jobs Completed" value={requests.filter(r => r.status === 'completed').length.toString()} trend="From project statuses" icon={<CheckCircle className="w-5 h-5 text-blue-600" />} />
+                                    <StatCard title="Trust Score" value={profile?.verified ? 'Verified' : 'Unverified'} trend="From creator profile" icon={<Star className="w-5 h-5 text-amber-500" />} />
                                 </div>
 
                                 {/* Recent Booking Requests */}
@@ -470,7 +519,14 @@ export default function CreatorDashboard() {
                                         <p className="text-stone-500 text-sm mt-1">Manage what clients see on your public profile.</p>
                                     </div>
                                     <div className="flex gap-3">
-                                        <button onClick={() => window.location.href = '/creators/c1'} className="px-5 py-2.5 bg-white border border-stone-200 text-stone-700 text-sm font-bold rounded-full hover:bg-stone-50 transition-colors">
+                                        <button
+                                            onClick={() => {
+                                                if (!userId) return;
+                                                router.push(`/creators/${userId}`);
+                                            }}
+                                            disabled={!userId}
+                                            className="px-5 py-2.5 bg-white border border-stone-200 text-stone-700 text-sm font-bold rounded-full hover:bg-stone-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
                                             Preview
                                         </button>
                                         <button
@@ -504,7 +560,9 @@ export default function CreatorDashboard() {
                                                 </div>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     <div>
-                                                        <label className="block text-sm font-bold text-stone-700 mb-1">Location</label>
+                                                        <label className="block text-sm font-bold text-stone-700 mb-1">
+                                                            Location {creatorType === 'studio_owner' && <span className="text-rose-500 ml-0.5">*</span>}
+                                                        </label>
                                                         <input
                                                             type="text"
                                                             value={location}
@@ -526,6 +584,23 @@ export default function CreatorDashboard() {
                                                 </div>
                                             </div>
                                         </section>
+                                        {/* Portfolio URL */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-stone-700 mb-1">
+                                                Portfolio URL
+                                                {(creatorType === 'studio_owner' || creatorType === 'freelancer') && <span className="text-rose-500 ml-0.5">*</span>}
+                                            </label>
+                                            <input
+                                                type="url"
+                                                value={portfolioUrl}
+                                                onChange={(e) => setPortfolioUrl(e.target.value)}
+                                                className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400"
+                                                placeholder="https://yourportfolio.com or Behance/Dribbble/Instagram link"
+                                            />
+                                            {(creatorType === 'studio_owner' || creatorType === 'freelancer') && (
+                                                <p className="text-xs text-stone-400 mt-1">Required. Add your primary portfolio or social media link.</p>
+                                            )}
+                                        </div>
 
                                         {/* Services & Rates */}
                                         <section className="bg-white p-6 rounded-3xl border border-stone-100 shadow-sm space-y-6">
@@ -540,22 +615,10 @@ export default function CreatorDashboard() {
                                             </div>
 
                                             <div className="space-y-4">
-                                                {/* Package Item 1 */}
-                                                <div className="p-4 rounded-2xl border border-stone-100 hover:border-rose-200 transition-colors group cursor-pointer">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <h4 className="font-bold text-stone-900 group-hover:text-rose-600 transition-colors">Standard Full Day Shoot</h4>
-                                                        <span className="font-bold text-stone-900">₹25,000 <span className="text-xs text-stone-500 font-medium">/ day</span></span>
-                                                    </div>
-                                                    <p className="text-sm text-stone-500">Includes 8 hours of shooting, basic lighting kit, and raw file delivery. Travel expenses extra.</p>
-                                                </div>
-
-                                                {/* Package Item 2 */}
-                                                <div className="p-4 rounded-2xl border border-stone-100 hover:border-rose-200 transition-colors group cursor-pointer">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <h4 className="font-bold text-stone-900 group-hover:text-rose-600 transition-colors">Half Day Shoot</h4>
-                                                        <span className="font-bold text-stone-900">₹15,000 <span className="text-xs text-stone-500 font-medium">/ 4hrs</span></span>
-                                                    </div>
-                                                    <p className="text-sm text-stone-500">Ideal for small interviews or B-roll collection. Includes basic equipment.</p>
+                                                <div className="p-4 rounded-2xl border border-stone-100 bg-stone-50">
+                                                    <p className="text-sm text-stone-600">
+                                                        Package data is not stored in the current database schema yet. Use your profile fields above to keep your public information up to date.
+                                                    </p>
                                                 </div>
                                             </div>
                                         </section>

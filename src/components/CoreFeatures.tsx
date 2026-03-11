@@ -1,6 +1,7 @@
 "use client";
 import { Zap, Users, BrainCircuit, Image as ImageIcon, PiggyBank, ShieldCheck, CreditCard, LayoutDashboard, Crown, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 const features = [
     // Row 1: The Core Booking Engine (Focus)
@@ -93,12 +94,12 @@ export const CoreFeatures = () => {
                     <p className="text-xl text-stone-600 max-w-2xl mx-auto font-medium mb-6">
                         From intelligent matchmaking to secure milestone payments, explore the features redefining the creative market.
                     </p>
-                    <button
-                        onClick={() => window.location.href = '/creators/c1'}
+                    <Link
+                        href="/search"
                         className="mx-auto flex items-center gap-2 px-6 py-3 bg-white border border-stone-200 text-orange-600 font-bold rounded-full hover:border-orange-200 hover:bg-orange-50 transition-colors shadow-sm group/link"
                     >
                         View Example Profile <ArrowRight className="w-4 h-4 group-hover/link:translate-x-1 transition-transform" />
-                    </button>
+                    </Link>
                 </motion.div>
 
                 {/* 9-Feature Bento Grid */}
@@ -127,13 +128,13 @@ export const CoreFeatures = () => {
                                 <p className="text-stone-600 text-base leading-relaxed font-medium mb-8 flex-grow">
                                     {feature.description}
                                 </p>
-                                <button
-                                    onClick={() => window.location.href = '/book'}
+                                <Link
+                                    href="/book"
                                     className="w-full mt-auto py-4 bg-orange-600 text-white font-bold rounded-2xl hover:bg-orange-700 transition-all flex items-center justify-center gap-2 group/btn shadow-lg shadow-orange-500/20 active:scale-95"
                                 >
                                     Try Quick Booking
                                     <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" />
-                                </button>
+                                </Link>
                             </div>
                         </motion.div>
                     ))}

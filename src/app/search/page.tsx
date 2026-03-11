@@ -5,48 +5,9 @@ import useSWR from "swr";
 import { Search, MapPin, Star, SlidersHorizontal, ChevronDown, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import Link from "next/link";
 import { Header } from "@/components/Header";
 import { createClient } from "@/utils/supabase/client";
-
-// Mock Data Fallback
-const mockCreators = [
-    {
-        id: "c1",
-        name: "Arjun Mehta",
-        role: "Director of Photography",
-        location: "Mumbai, India",
-        rating: 4.9,
-        reviews: 124,
-        rate: 25000,
-        verified: true,
-        image: "https://images.unsplash.com/photo-1542385262-cea6e8a4bb2a?w=400&q=80",
-        tags: ["Commercial", "Documentary"]
-    },
-    {
-        id: "c2",
-        name: "Sarah Chen",
-        role: "Video Editor",
-        location: "Bengaluru, India",
-        rating: 5.0,
-        reviews: 89,
-        rate: 15000,
-        verified: true,
-        image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&q=80",
-        tags: ["Color Grading", "VFX"]
-    },
-    {
-        id: "c3",
-        name: "Vikram Singh",
-        role: "Drone Operator",
-        location: "Delhi, India",
-        rating: 4.8,
-        reviews: 56,
-        rate: 18000,
-        verified: false,
-        image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&q=80",
-        tags: ["Aerial", "Real Estate"]
-    }
-];
 
 const roles = ["All Roles", "Director", "Director of Photography", "Camera Operator", "Video Editor", "Drone Operator", "Production Assistant"];
 
@@ -82,24 +43,23 @@ export default function SearchPage() {
                 name: (c.users as { full_name?: string })?.full_name || "Unknown Creator",
                 role: c.role as string,
                 location: c.location as string,
-                rating: 5.0, // Mock rating for now
+                rating: 0,
                 reviews: 0,
                 rate: Number(c.day_rate) || 0,
                 verified: Boolean(c.verified),
-                image: (c.profile_image_url as string) || "https://images.unsplash.com/photo-1542385262-cea6e8a4bb2a?w=400&q=80",
+                image: (c.profile_image_url as string) || "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&q=80",
                 tags: (c.tags as string[]) || []
             }));
-        } else {
-            // Fallback to mock data if database is empty (for presentation)
-            return mockCreators;
         }
+
+        return [];
     };
 
-    const { data: creators = mockCreators, isValidating: loading } = useSWR(
+    const { data: creators = [], isValidating: loading } = useSWR(
         'search-creators',
         fetchCreators,
         {
-            fallbackData: mockCreators
+            fallbackData: []
         }
     );
 
@@ -163,6 +123,8 @@ export default function SearchPage() {
                                         <label className="block text-sm font-bold text-stone-700 mb-2">Role</label>
                                         <div className="relative">
                                             <select
+                                                aria-label="Role"
+                                                title="Role"
                                                 value={selectedRole}
                                                 onChange={(e) => setSelectedRole(e.target.value)}
                                                 className="w-full p-3 rounded-xl border border-stone-200 bg-white text-stone-900 appearance-none focus:border-orange-500 focus:outline-none"
@@ -180,6 +142,8 @@ export default function SearchPage() {
                                             <span className="text-sm font-semibold text-orange-600">₹{maxRate.toLocaleString()}</span>
                                         </div>
                                         <input
+                                            aria-label="Maximum day rate"
+                                            title="Maximum day rate"
                                             type="range"
                                             min="5000"
                                             max="100000"
@@ -194,12 +158,12 @@ export default function SearchPage() {
                                         </div>
                                     </div>
 
-                                    {/* Location Filter (Mock visual) */}
+                                    {/* Location Filter */}
                                     <div>
                                         <label className="block text-sm font-bold text-stone-700 mb-2">Location</label>
                                         <div className="relative">
                                             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
-                                            <select className="w-full pl-9 pr-3 py-3 rounded-xl border border-stone-200 bg-white text-stone-900 appearance-none focus:border-orange-500 focus:outline-none">
+                                            <select aria-label="Location" title="Location" className="w-full pl-9 pr-3 py-3 rounded-xl border border-stone-200 bg-white text-stone-900 appearance-none focus:border-orange-500 focus:outline-none">
                                                 <option>Any Location (India)</option>
                                                 <option>Mumbai</option>
                                                 <option>Delhi NCR</option>
@@ -246,18 +210,21 @@ export default function SearchPage() {
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
                         {filteredCreators.map((creator: any) => (
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.95 }}
-                                transition={{ duration: 0.2 }}
+                            <Link
                                 key={creator.id}
-                                onClick={() => window.location.href = `/creators/${creator.id}`}
-                                className="bg-white rounded-[2rem] border border-stone-200 overflow-hidden hover:border-orange-300 hover:shadow-xl hover:shadow-orange-500/10 transition-all cursor-pointer group flex flex-col"
+                                href={`/creators/${creator.id}`}
+                                className="block"
                             >
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="bg-white rounded-[2rem] border border-stone-200 overflow-hidden hover:border-orange-300 hover:shadow-xl hover:shadow-orange-500/10 transition-all cursor-pointer group flex flex-col"
+                                >
                                 {/* Img Header */}
                                 <div className="h-48 relative overflow-hidden bg-stone-100 flex-shrink-0">
-                                    <Image src={creator.image} alt={creator.name} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
+                                    <Image src={creator.image} alt={creator.name} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-500" />
                                     {creator.verified && (
                                         <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-green-700 flex items-center gap-1 shadow-sm">
                                             <CheckCircle className="w-3.5 h-3.5" /> Verified
@@ -301,7 +268,8 @@ export default function SearchPage() {
                                         </div>
                                     </div>
                                 </div>
-                            </motion.div>
+                                </motion.div>
+                            </Link>
                         ))}
                     </div>
                 )}

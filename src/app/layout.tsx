@@ -13,37 +13,46 @@ const outfit = Outfit({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 export const metadata: Metadata = {
-  metadataBase: new URL('http://localhost:3000'), // Replace with production URL when deploying
+  metadataBase: new URL(siteUrl),
   title: {
-    default: "Parichay | AI-Enabled Creative Production Marketplace",
-    template: "%s | Parichay"
+    default: "ShotcutCrew | AI-Enabled Creative Production Marketplace",
+    template: "%s | ShotcutCrew"
   },
   description: "Connect with verified photographers, videographers, and full production crews through a transparent, structured booking ecosystem.",
-  keywords: ["photography", "videography", "production crew", "creative marketplace", "book photographers", "find videographers", "Parichay"],
-  authors: [{ name: "Parichay Team" }],
-  creator: "Parichay",
+  keywords: ["photography", "videography", "production crew", "creative marketplace", "book photographers", "find videographers", "ShotcutCrew"],
+  authors: [{ name: "ShotcutCrew Team" }],
+  creator: "ShotcutCrew",
+  icons: {
+    icon: [
+      { url: "/icon.png", type: "image/png" },
+    ],
+    shortcut: "/icon.png",
+    apple: [{ url: "/apple-icon.png", type: "image/png" }],
+  },
   openGraph: {
     type: "website",
     locale: "en_IN",
     url: "/",
-    title: "Parichay | AI-Enabled Creative Production Marketplace",
+    title: "ShotcutCrew | AI-Enabled Creative Production Marketplace",
     description: "Connect with verified photographers, videographers, and full production crews through a transparent, structured booking ecosystem.",
-    siteName: "Parichay",
+    siteName: "ShotcutCrew",
     images: [
       {
-        url: "/og-image.jpg", // Create this in public folder later
+        url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Parichay - Creative Production Marketplace",
+        alt: "ShotcutCrew - Creative Production Marketplace",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Parichay | AI-Enabled Creative Production Marketplace",
+    title: "ShotcutCrew | AI-Enabled Creative Production Marketplace",
     description: "Connect with verified photographers, videographers, and full production crews through a transparent, structured booking ecosystem.",
-    images: ["/og-image.jpg"],
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,
@@ -64,7 +73,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="light" style={{ colorScheme: 'light' }}>
+    <html lang="en" className="light">
       <body className={`${inter.variable} ${outfit.variable} font-sans antialiased text-stone-900 bg-[#fffcf8] selection:bg-orange-500/30`} >
         {children}
         <Toaster richColors position="bottom-right" />

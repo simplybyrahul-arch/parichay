@@ -5,11 +5,11 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const faqs = [
     {
-        question: "How are creators vetted on Parichay?",
+        question: "How are creators vetted on ShotcutCrew?",
         answer: "Every creator goes through a 3-step verification process focusing on portfolio quality, client references, and professional reliability before they are listed on our marketplace.",
     },
     {
-        question: "Does Parichay handle the payments?",
+        question: "Does ShotcutCrew handle the payments?",
         answer: "Yes. Payments are held securely in escrow and released upon completion of agreed-upon milestones, protecting both the client and the creator.",
     },
     {
@@ -34,7 +34,7 @@ export const FAQ = () => {
                         Frequently Asked Questions
                     </h2>
                     <p className="text-lg text-stone-600 font-medium">
-                        Everything you need to know about production on Parichay.
+                        Everything you need to know about production on ShotcutCrew.
                     </p>
                 </div>
 

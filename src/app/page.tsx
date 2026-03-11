@@ -10,11 +10,11 @@ import { Header } from "@/components/Header";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Parichay | The Creative Production Marketplace",
-  description: "Book verified photographers, videographers, and pro crews instantly. Streamline your creative production with Parichay.",
+  title: "ShotcutCrew | The Creative Production Marketplace",
+  description: "Book verified photographers, videographers, and pro crews instantly. Streamline your creative production with ShotcutCrew.",
   openGraph: {
-    title: "Parichay | The Creative Production Marketplace",
-    description: "Book verified photographers, videographers, and pro crews instantly. Streamline your creative production with Parichay.",
+    title: "ShotcutCrew | The Creative Production Marketplace",
+    description: "Book verified photographers, videographers, and pro crews instantly. Streamline your creative production with ShotcutCrew.",
   },
 };
 
@@ -22,13 +22,13 @@ export default function Home() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "Parichay",
-    url: "https://parichay.com", // Replace
-    logo: "https://parichay.com/logo.png", // Replace
+    name: "ShotcutCrew",
+    url: "https://shotcutcrew.com", // Replace with production URL
+    logo: "https://shotcutcrew.com/logo.png", // Replace with production URL
     description: "AI-Enabled Creative Production Marketplace connecting clients with verified creative professionals.",
     sameAs: [
-      "https://twitter.com/parichay",
-      "https://instagram.com/parichay"
+      "https://twitter.com/shotcutcrew",
+      "https://instagram.com/shotcutcrew"
     ]
   };
 

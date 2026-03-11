@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Client Dashboard | Parichay",
+    title: "Client Dashboard",
     description: "Manage your creative projects, view escrow status, and communicate with creators.",
     robots: {
         index: false,

@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Book a Project | Parichay",
+    title: "Book a Project",
     description: "Provide details about your upcoming production to instantly match with top-rated creative professionals.",
 };
 

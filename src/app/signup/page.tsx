@@ -1,21 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Mail, Lock, User, Briefcase, Camera, CheckCircle } from "lucide-react";
+import { ArrowRight, Mail, Lock, User, Briefcase, Building2, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { signup } from "../actions/auth";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export default function SignupPage() {
     const [accountType, setAccountType] = useState<"client" | "creator" | null>(null);
-    const [step, setStep] = useState(1);
+    const [creatorType, setCreatorType] = useState<"studio_owner" | "freelancer" | null>(null);
+    const [step, setStep] = useState(1); // 1=account type, 2=creator sub-type, 3=credentials
     const [formData, setFormData] = useState({ name: "", email: "", password: "" });
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
 
     const handleTypeSelection = (type: "client" | "creator") => {
         setAccountType(type);
-        setStep(2);
+        if (type === "client") {
+            setStep(3);
+        } else {
+            setStep(2);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -29,7 +35,7 @@ export default function SignupPage() {
             data.append("email", formData.email);
             data.append("password", formData.password);
 
-            await signup(data, accountType || "client");
+            await signup(data, accountType || "client", creatorType || undefined);
         } catch (error) {
             setErrorMsg("Failed to create account. Please try again.");
             setLoading(false);
@@ -45,9 +51,9 @@ export default function SignupPage() {
 
             <div className="w-full max-w-xl relative z-10">
                 <div className="text-center mb-10">
-                    <Link href="/" className="inline-block mb-8">
-                        <div className="font-display font-black text-3xl tracking-tight text-stone-900">PARICHAY.</div>
-                    </Link>
+                    <div className="inline-block mb-8">
+                        <BrandLogo href="/" width={220} height={64} className="h-auto w-[180px] md:w-[220px]" priority />
+                    </div>
                 </div>
 
                 <AnimatePresence mode="wait">
@@ -64,7 +70,7 @@ export default function SignupPage() {
                                 Join the Platform
                             </h1>
                             <p className="text-stone-500 font-medium pb-8 text-center px-4">
-                                Are you looking to hire a crew, or are you a creative professional?
+                                Are you looking to hire a crew, or offer your creative services?
                             </p>
 
                             <div className="grid md:grid-cols-2 gap-4">
@@ -80,16 +86,16 @@ export default function SignupPage() {
                                     <p className="text-stone-500 text-sm">I want to hire verified production crews and talent.</p>
                                 </button>
 
-                                {/* Creator Option */}
+                                {/* Studio Owner / Freelancer Option */}
                                 <button
                                     onClick={() => handleTypeSelection("creator")}
                                     className="p-6 border-2 border-transparent bg-stone-50 rounded-2xl hover:border-rose-500 hover:bg-rose-50 transition-all text-left group relative overflow-hidden"
                                 >
                                     <div className="w-12 h-12 bg-white rounded-xl shadow-sm text-rose-600 flex items-center justify-center mb-4">
-                                        <Camera className="w-6 h-6" />
+                                        <Building2 className="w-6 h-6" />
                                     </div>
-                                    <h3 className="font-bold text-stone-900 text-xl font-display mb-2 group-hover:text-rose-600 transition-colors">Creator</h3>
-                                    <p className="text-stone-500 text-sm">I want to build my profile and accept booking requests.</p>
+                                    <h3 className="font-bold text-stone-900 text-xl font-display mb-2 group-hover:text-rose-600 transition-colors">Studio Owner / Freelancer</h3>
+                                    <p className="text-stone-500 text-sm">I want to offer creative services and accept booking requests.</p>
                                 </button>
                             </div>
 
@@ -105,11 +111,13 @@ export default function SignupPage() {
                     )}
 
                     {/* STEP 2: Credentials Form */}
+                    {/* STEP 2: Creator Sub-Type Selection */}
                     {step === 2 && (
                         <motion.div
-                            key="step2"
+                            key="step2-subtype"
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
                             className="bg-white p-8 md:p-10 rounded-[2rem] shadow-2xl shadow-stone-200/50 border border-stone-100"
                         >
                             <button onClick={() => setStep(1)} className="text-stone-400 hover:text-stone-900 text-sm mb-6 transition-colors">
@@ -117,7 +125,54 @@ export default function SignupPage() {
                             </button>
 
                             <h1 className="text-3xl font-black tracking-tight text-stone-900 mb-2 font-display">
-                                Create {accountType === "client" ? "Client" : "Creator"} Account
+                                How do you work?
+                            </h1>
+                            <p className="text-stone-500 font-medium pb-8 text-sm">
+                                Select the option that best describes your setup.
+                            </p>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                {/* Studio Owner */}
+                                <button
+                                    onClick={() => { setCreatorType("studio_owner"); setStep(3); }}
+                                    className="p-6 border-2 border-transparent bg-stone-50 rounded-2xl hover:border-rose-500 hover:bg-rose-50 transition-all text-left group"
+                                >
+                                    <div className="w-12 h-12 bg-white rounded-xl shadow-sm text-rose-600 flex items-center justify-center mb-4">
+                                        <Building2 className="w-6 h-6" />
+                                    </div>
+                                    <h3 className="font-bold text-stone-900 text-xl font-display mb-2 group-hover:text-rose-600 transition-colors">Studio Owner</h3>
+                                    <p className="text-stone-500 text-sm">I run a production studio and offer professional crew services.</p>
+                                </button>
+
+                                {/* Freelancer */}
+                                <button
+                                    onClick={() => { setCreatorType("freelancer"); setStep(3); }}
+                                    className="p-6 border-2 border-transparent bg-stone-50 rounded-2xl hover:border-orange-500 hover:bg-orange-50 transition-all text-left group"
+                                >
+                                    <div className="w-12 h-12 bg-white rounded-xl shadow-sm text-orange-600 flex items-center justify-center mb-4">
+                                        <User className="w-6 h-6" />
+                                    </div>
+                                    <h3 className="font-bold text-stone-900 text-xl font-display mb-2 group-hover:text-orange-600 transition-colors">Freelancer</h3>
+                                    <p className="text-stone-500 text-sm">I work independently as a photographer, videographer, or editor.</p>
+                                </button>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* STEP 3: Credentials Form */}
+                    {step === 3 && (
+                        <motion.div
+                            key="step3-credentials"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="bg-white p-8 md:p-10 rounded-[2rem] shadow-2xl shadow-stone-200/50 border border-stone-100"
+                        >
+                            <button onClick={() => accountType === "creator" ? setStep(2) : setStep(1)} className="text-stone-400 hover:text-stone-900 text-sm mb-6 transition-colors">
+                                ← Back
+                            </button>
+
+                            <h1 className="text-3xl font-black tracking-tight text-stone-900 mb-2 font-display">
+                                {accountType === "client" ? "Create Client Account" : creatorType === "studio_owner" ? "Create Studio Profile" : "Create Freelancer Profile"}
                             </h1>
                             <p className="text-stone-500 font-medium pb-8 border-b border-stone-100 mb-8">
                                 {accountType === "client"
@@ -140,7 +195,7 @@ export default function SignupPage() {
                                             type="text"
                                             value={formData.name}
                                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                            placeholder="Nitin Studio"
+                                            placeholder={accountType === "client" ? "Your full name" : creatorType === "studio_owner" ? "Your studio name" : "Your full name"}
                                             required
                                             className="w-full pl-12 pr-4 py-4 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
                                         />
@@ -181,7 +236,7 @@ export default function SignupPage() {
                                 <label className="flex items-start gap-3 mt-4 cursor-pointer">
                                     <input type="checkbox" required className="mt-1 w-4 h-4 text-orange-600 rounded border-stone-300 focus:ring-orange-500" />
                                     <span className="text-sm text-stone-600 select-none">
-                                        I agree to the Parichay <span className="font-bold text-orange-600 hover:underline">Terms of Service</span> and <span className="font-bold text-orange-600 hover:underline">Privacy Policy</span>.
+                                        I agree to the ShotcutCrew <span className="font-bold text-orange-600 hover:underline">Terms of Service</span> and <span className="font-bold text-orange-600 hover:underline">Privacy Policy</span>.
                                     </span>
                                 </label>
 

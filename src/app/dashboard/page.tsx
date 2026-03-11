@@ -21,6 +21,8 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { toast } from "sonner";
+import { logout } from "../actions/auth";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export default function Dashboard() {
     const [activeTab, setActiveTab] = useState("overview");
@@ -66,8 +68,7 @@ export default function Dashboard() {
     }, [supabase, router]);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
-        router.push("/login");
+        await logout();
     };
 
     const handleFundEscrow = async (project: Record<string, any>) => {
@@ -93,7 +94,7 @@ export default function Dashboard() {
                 key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_placeholder",
                 amount: orderData.amount,
                 currency: orderData.currency,
-                name: "Parichay Creative Escrow",
+                name: "ShotcutCrew Creative Escrow",
                 description: `Funding for Project: ${project.title}`,
                 order_id: orderData.orderId,
                 handler: async function (response: Record<string, any>) {
@@ -146,6 +147,15 @@ export default function Dashboard() {
         }
     };
 
+    const formatProjectDate = (value: string) => {
+        return new Intl.DateTimeFormat("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            timeZone: "UTC",
+        }).format(new Date(value));
+    };
+
     // Calculate Dynamic Stats
     const activeProjectCount = projects.filter(p => !['completed', 'cancelled'].includes(p.status)).length;
     const totalSpent = projects.reduce((acc, curr) => acc + curr.budget, 0);
@@ -156,8 +166,8 @@ export default function Dashboard() {
                 onClick={() => router.push('/')}
                 className="p-6 border-b border-stone-100 cursor-pointer flex justify-between items-center"
             >
-                <div className="font-display font-black text-2xl tracking-tight text-stone-900">PARICHAY.</div>
-                <button className="md:hidden text-stone-400" onClick={() => setMobileMenuOpen(false)}>
+                <BrandLogo href="/" width={170} height={50} className="h-auto w-[140px] md:w-[170px]" priority />
+                <button aria-label="Close sidebar" title="Close sidebar" className="md:hidden text-stone-400" onClick={() => setMobileMenuOpen(false)}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
                 </button>
             </div>
@@ -214,7 +224,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-stone-900 truncate" title={userEmail || ""}>{userEmail}</p>
-                        <p className="text-xs text-stone-500 truncate">Parichay Account</p>
+                        <p className="text-xs text-stone-500 truncate">ShotcutCrew Account</p>
                     </div>
                 </div>
             </div>
@@ -256,13 +266,14 @@ export default function Dashboard() {
                 <header className="h-20 bg-white/80 backdrop-blur-md border-b border-stone-100 flex items-center justify-between px-6 sticky top-0 z-20">
                     <div className="flex items-center gap-4 flex-1">
                         {/* Mobile Menu Toggle */}
-                        <button onClick={() => setMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-stone-600 hover:bg-stone-100 rounded-lg">
+                        <button aria-label="Open sidebar" title="Open sidebar" onClick={() => setMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-stone-600 hover:bg-stone-100 rounded-lg">
                             <MoreVertical className="w-5 h-5" />
                         </button>
 
                         <div className="relative max-w-md w-full hidden sm:block">
                             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                             <input
+                                suppressHydrationWarning
                                 type="text"
                                 placeholder="Search projects, creators, or messages..."
                                 className="w-full pl-9 pr-4 py-2 bg-stone-50 border border-stone-200 rounded-full text-sm focus:outline-none focus:border-orange-500 focus:bg-white transition-colors"
@@ -272,13 +283,16 @@ export default function Dashboard() {
 
                     <div className="flex items-center gap-4">
                         <button
+                            suppressHydrationWarning
+                            aria-label="Open notifications"
+                            title="Open notifications"
                             onClick={() => setActiveTab("notifications")}
                             className="w-10 h-10 rounded-full bg-stone-50 border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-100 transition-colors relative"
                         >
                             <Bell className="w-5 h-5" />
                             <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
                         </button>
-                        <button onClick={() => router.push('/book')} className="px-5 py-2 hidden sm:flex bg-orange-600 text-white text-sm font-bold rounded-full hover:bg-orange-700 transition-colors items-center gap-2">
+                        <button suppressHydrationWarning onClick={() => router.push('/book')} className="px-5 py-2 hidden sm:flex bg-orange-600 text-white text-sm font-bold rounded-full hover:bg-orange-700 transition-colors items-center gap-2">
                             New Project
                         </button>
                     </div>
@@ -308,6 +322,7 @@ export default function Dashboard() {
                                     <div className="flex items-center justify-between mb-6">
                                         <h2 className="text-xl font-bold text-stone-900 font-display">Active Projects</h2>
                                         <button
+                                            suppressHydrationWarning
                                             onClick={() => setActiveTab("projects")}
                                             className="text-sm font-semibold text-orange-600 hover:text-orange-700"
                                         >
@@ -327,7 +342,7 @@ export default function Dashboard() {
                                             </div>
                                             <h3 className="text-xl font-bold text-stone-900 mb-2 font-display">No projects yet</h3>
                                             <p className="text-stone-500 max-w-sm mx-auto mb-6">You haven&apos;t booked any creators or started any projects yet.</p>
-                                            <button onClick={() => router.push('/book')} className="px-6 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors inline-flex items-center gap-2">
+                                            <button suppressHydrationWarning onClick={() => router.push('/book')} className="px-6 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors inline-flex items-center gap-2">
                                                 Start a New Project
                                             </button>
                                         </div>
@@ -336,7 +351,7 @@ export default function Dashboard() {
                                             {projects.map((project) => (
                                                 <div
                                                     key={project.id}
-                                                    onClick={() => router.push(`/dashboard/p1`)} // Hardcoded drilldown for now
+                                                    onClick={() => router.push(`/dashboard/${project.id}`)}
                                                     className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm hover:shadow-md hover:border-orange-200 transition-all group flex flex-col lg:flex-row gap-6 lg:items-center cursor-pointer"
                                                 >
                                                     {/* Project Info */}
@@ -347,7 +362,7 @@ export default function Dashboard() {
                                                         <div>
                                                             <h3 className="font-bold text-stone-900 text-lg mb-1 group-hover:text-orange-600 transition-colors line-clamp-1">{project.title}</h3>
                                                             <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-stone-500">
-                                                                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {new Date(project.created_at).toLocaleDateString()}</span>
+                                                                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {formatProjectDate(project.created_at)}</span>
                                                                 <span className="w-1 h-1 bg-stone-300 rounded-full" />
                                                                 <span className="text-stone-700 bg-stone-100 px-2 py-0.5 rounded-md truncate max-w-[150px]">{project.description}</span>
                                                             </div>

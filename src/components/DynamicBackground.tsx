@@ -9,15 +9,15 @@ export const DynamicBackground = () => {
             style={{ willChange: "background" }}
             animate={{
                 background: [
-                    "linear-gradient(to bottom, #ffecd2 0%, #fcb69f 100%)",    // Dawn (Soft Peach/Pink)
-                    "linear-gradient(to bottom, #fdfbfb 0%, #ebedee 100%)",    // Morning (Bright/Crisp)
-                    "linear-gradient(to bottom, #ff9a44 0%, #fc6076 100%)",    // Sunset (Vibrant Orange/Red)
-                    "linear-gradient(to bottom, #ffd194 0%, #70e1f5 100%)",    // Golden Hour (Gold to Blue)
-                    "linear-gradient(to bottom, #ffecd2 0%, #fcb69f 100%)",    // Dawn (loop back smoothly)
+                    "linear-gradient(to bottom, #ffecd2 0%, #fcb69f 100%)",
+                    "linear-gradient(to bottom, #fdfbfb 0%, #ebedee 100%)",
+                    "linear-gradient(to bottom, #ff9a44 0%, #fc6076 100%)",
+                    "linear-gradient(to bottom, #ffd194 0%, #70e1f5 100%)",
+                    "linear-gradient(to bottom, #ffecd2 0%, #fcb69f 100%)",
                 ],
             }}
             transition={{
-                duration: 30, // Slow, smooth transition
+                duration: 30,
                 ease: "linear",
                 repeat: Infinity,
             }}
