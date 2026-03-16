@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-    Zap, Settings, ArrowRight, CheckCircle, Plus, Minus, Trash2,
+    Zap, Settings, ArrowRight, ArrowLeft, CheckCircle, Plus, Minus, Trash2,
     CalendarDays, Package, FileText, Brain, Upload
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
@@ -261,13 +261,31 @@ export default function BookingFlow() {
         </div>
     );
 
+    const handleBackNavigation = () => {
+        if (window.history.length > 1) {
+            router.back();
+            return;
+        }
+        router.push('/');
+    };
+
     return (
         <main className="min-h-screen bg-[#fffcf8] selection:bg-orange-500/30 pt-24 pb-32 px-6 flex flex-col items-center">
 
             {/* Top Navigation */}
             <div className="w-full max-w-5xl mx-auto flex justify-between items-center mb-8 md:mb-12">
-                <div onClick={() => router.push('/')} className="cursor-pointer">
-                    <BrandLogo href="/" width={190} height={56} className="h-auto w-[150px] md:w-[190px]" priority />
+                <div className="flex items-center gap-3 md:gap-4">
+                    <button
+                        onClick={handleBackNavigation}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-full border border-stone-200 bg-white text-stone-700 hover:text-stone-900 hover:border-stone-300 transition-colors text-sm font-semibold"
+                        aria-label="Go back"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Back
+                    </button>
+                    <div onClick={() => router.push('/')} className="cursor-pointer">
+                        <BrandLogo href="/" width={190} height={56} className="h-auto w-[150px] md:w-[190px]" priority />
+                    </div>
                 </div>
                 {mode !== "selection" && (
                     <button onClick={() => { setMode("selection"); setStep(1); }} className="text-sm font-semibold text-stone-500 hover:text-stone-900 transition-colors">

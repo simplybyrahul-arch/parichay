@@ -2,7 +2,6 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { BrandLogo } from './BrandLogo';
 
 export const Header = () => {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -22,7 +21,9 @@ export const Header = () => {
 
     return (
         <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between bg-white/40 backdrop-blur-md border-b border-stone-200/50">
-            <BrandLogo href="/" width={180} height={52} className="h-auto w-[150px] md:w-[180px]" priority />
+            <Link href="/" className="text-xl md:text-2xl font-black tracking-tight text-stone-900 hover:text-orange-600 transition-colors">
+                ShotcutCrew
+            </Link>
             <div className="flex items-center gap-4">
                 <Link href="/search" className="text-stone-500 hover:text-orange-500 transition-colors hidden sm:flex items-center gap-2 text-sm font-bold bg-stone-50 px-4 py-2 rounded-full border border-stone-200 hover:border-orange-200">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>

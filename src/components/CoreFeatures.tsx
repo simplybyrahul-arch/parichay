@@ -19,6 +19,13 @@ const features = [
         className: "md:col-span-1 bg-white border-stone-200",
         hasPattern: false,
     },
+    {
+        icon: <ShieldCheck className="w-8 h-8 text-amber-500 group-hover:scale-110 transition-transform" />,
+        title: "3. Verified Creators",
+        description: "Structured profiles with portfolios, tags, reliable availability, and verified client trust scores.",
+        className: "md:col-span-1 bg-white border-stone-200",
+        hasPattern: false,
+    },
     // Row 2: AI & Smart Match
     {
         icon: <BrainCircuit className="w-8 h-8 text-rose-500 group-hover:scale-110 transition-transform" />,
@@ -42,13 +49,6 @@ const features = [
         hasPattern: false,
     },
     // Row 3: Trust & Platform Value
-    {
-        icon: <ShieldCheck className="w-8 h-8 text-amber-500 group-hover:scale-110 transition-transform" />,
-        title: "3. Verified Creators",
-        description: "Structured profiles with portfolios, tags, reliable availability, and verified client trust scores.",
-        className: "md:col-span-1 bg-white border-stone-200",
-        hasPattern: false,
-    },
     {
         icon: <CreditCard className="w-8 h-8 text-indigo-500 group-hover:scale-110 transition-transform" />,
         title: "7. Secure Escrow",
