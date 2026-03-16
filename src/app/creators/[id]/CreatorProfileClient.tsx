@@ -6,7 +6,40 @@ import Image from "next/image";
 import Link from "next/link";
 import { BrandLogo } from "@/components/BrandLogo";
 
-export default function CreatorProfileClient({ creator }: { creator: Record<string, any> }) {
+type PortfolioItem = {
+    id: string;
+    url: string;
+    title: string;
+    type: "video" | "image" | string;
+};
+
+type CreatorService = {
+    name: string;
+    time: string;
+    price: string;
+};
+
+type CreatorProfile = {
+    coverImage: string;
+    avatar: string;
+    name: string;
+    verified: boolean;
+    role: string;
+    location: string;
+    rating: number;
+    reviews: number;
+    bio: string;
+    tags: string[];
+    portfolio: PortfolioItem[];
+    services: CreatorService[];
+    stats: {
+        jobsCompleted: number;
+        repeatClients: string;
+        responseTime: string;
+    };
+};
+
+export default function CreatorProfileClient({ creator }: { creator: CreatorProfile }) {
     return (
         <main className="min-h-screen bg-[#fffcf8] selection:bg-orange-500/30">
             {/* Cover Image */}
@@ -140,7 +173,7 @@ export default function CreatorProfileClient({ creator }: { creator: Record<stri
                                 <button className="text-sm font-semibold text-orange-600 hover:text-orange-700 transition-colors">View All</button>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {creator.portfolio.map((item: Record<string, any>, index: number) => (
+                                {creator.portfolio.map((item: PortfolioItem, index: number) => (
                                     <motion.div
                                         initial={{ opacity: 0, scale: 0.95 }}
                                         animate={{ opacity: 1, scale: 1 }}
@@ -170,7 +203,7 @@ export default function CreatorProfileClient({ creator }: { creator: Record<stri
                         <section>
                             <h3 className="text-2xl font-black text-stone-900 font-display tracking-tight mb-8">Services & Rates</h3>
                             <div className="space-y-4">
-                                {creator.services.map((service: Record<string, any>, index: number) => (
+                                {creator.services.map((service: CreatorService, index: number) => (
                                     <div key={index} className="bg-white rounded-2xl p-6 border border-stone-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-orange-200 transition-colors cursor-pointer group">
                                         <div>
                                             <h4 className="font-bold text-stone-900 text-lg mb-1 group-hover:text-orange-600 transition-colors">{service.name}</h4>

@@ -24,6 +24,54 @@ import { toast } from "sonner";
 import { logout } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
 
+type Project = {
+    id: string;
+    title: string;
+    budget: number;
+    status: string;
+    created_at: string;
+};
+
+type RazorpaySuccessResponse = {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+};
+
+type RazorpayFailureResponse = {
+    error?: {
+        description?: string;
+    };
+};
+
+type RazorpayOptions = {
+    key: string;
+    amount: number;
+    currency: string;
+    name: string;
+    description: string;
+    order_id: string;
+    handler: (response: RazorpaySuccessResponse) => Promise<void>;
+    prefill: {
+        name: string;
+        email: string;
+    };
+    theme: {
+        color: string;
+    };
+};
+
+type RazorpayInstance = {
+    on: (event: 'payment.failed', handler: (response: RazorpayFailureResponse) => void) => void;
+    open: () => void;
+};
+
+type RazorpayConstructor = new (options: RazorpayOptions) => RazorpayInstance;
+
+type WindowWithRazorpay = Window & {
+    Razorpay?: RazorpayConstructor;
+};
+
 export default function Dashboard() {
     const [activeTab, setActiveTab] = useState("overview");
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -71,7 +119,7 @@ export default function Dashboard() {
         await logout();
     };
 
-    const handleFundEscrow = async (project: Record<string, any>) => {
+    const handleFundEscrow = async (project: Project) => {
         setIsFunding(project.id);
         const toastId = toast.loading("Initializing secure escrow payment...");
 
@@ -97,7 +145,7 @@ export default function Dashboard() {
                 name: "ShotcutCrew Creative Escrow",
                 description: `Funding for Project: ${project.title}`,
                 order_id: orderData.orderId,
-                handler: async function (response: Record<string, any>) {
+                handler: async function (response: RazorpaySuccessResponse) {
                     toast.loading("Verifying payment...", { id: toastId });
 
                     // 3. Verify Payment
@@ -130,9 +178,13 @@ export default function Dashboard() {
                 }
             };
 
-            const rzp = new (window as typeof window & Record<string, any>).Razorpay(options);
+            const razorpay = (window as WindowWithRazorpay).Razorpay;
+            if (!razorpay) {
+                throw new Error("Payment gateway is not available right now.");
+            }
+            const rzp = new razorpay(options);
 
-            rzp.on('payment.failed', function (response: Record<string, any>) {
+            rzp.on('payment.failed', function (response: RazorpayFailureResponse) {
                 toast.error(`Payment Failed: ${response.error?.description || "Unknown"}`, { id: toastId });
             });
 

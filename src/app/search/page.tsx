@@ -11,6 +11,19 @@ import { createClient } from "@/utils/supabase/client";
 
 const roles = ["All Roles", "Director", "Director of Photography", "Camera Operator", "Video Editor", "Drone Operator", "Production Assistant"];
 
+type Creator = {
+    id: string;
+    name: string;
+    role: string;
+    location: string;
+    rating: number;
+    reviews: number;
+    rate: number;
+    verified: boolean;
+    image: string;
+    tags: string[];
+};
+
 export default function SearchPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedRole, setSelectedRole] = useState("All Roles");
@@ -19,7 +32,7 @@ export default function SearchPage() {
     const supabase = createClient();
 
     // SWR Data Fetcher
-    const fetchCreators = async () => {
+    const fetchCreators = async (): Promise<Creator[]> => {
         // Fetch creators and join with users to get full_name
         const { data, error } = await supabase
             .from('creators')
@@ -64,7 +77,7 @@ export default function SearchPage() {
     );
 
     // Filter Logic
-    const filteredCreators = creators.filter((creator: any) => {
+    const filteredCreators = creators.filter((creator: Creator) => {
         const matchesQuery = creator.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (creator.tags && creator.tags.some((tag: string) => tag.toLowerCase().includes(searchQuery.toLowerCase())));
         const matchesRole = selectedRole === "All Roles" || creator.role === selectedRole;
@@ -209,7 +222,7 @@ export default function SearchPage() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-                        {filteredCreators.map((creator: any) => (
+                        {filteredCreators.map((creator: Creator) => (
                             <Link
                                 key={creator.id}
                                 href={`/creators/${creator.id}`}
