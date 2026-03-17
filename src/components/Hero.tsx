@@ -5,7 +5,10 @@ import Link from "next/link";
 
 export const Hero = () => {
     return (
-        <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden px-6 pt-24 pb-16 bg-transparent">
+        <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden px-6 pt-24 pb-16 bg-gradient-to-br from-amber-50/90 via-orange-100/70 to-rose-100/80">
+
+            {/* Base color wash to avoid a flat white-paper look */}
+            <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_20%_20%,rgba(251,146,60,0.28),transparent_42%),radial-gradient(circle_at_80%_18%,rgba(244,114,182,0.2),transparent_38%),radial-gradient(circle_at_50%_85%,rgba(56,189,248,0.16),transparent_45%)]" />
 
             {/* Background Animated Orbs / Gradients (Warm) */}
             <div className="absolute inset-0 z-0 overflow-hidden mix-blend-multiply">
@@ -18,6 +21,11 @@ export const Hero = () => {
                     animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.5, 0.3] }}
                     transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1 }}
                     className="absolute top-[20%] -right-[10%] w-[40vw] h-[40vw] rounded-full bg-rose-400/30 blur-[100px]"
+                />
+                <motion.div
+                    animate={{ y: [0, -15, 0], opacity: [0.18, 0.28, 0.18] }}
+                    transition={{ duration: 9, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
+                    className="absolute -bottom-[18%] left-[22%] w-[42vw] h-[42vw] rounded-full bg-sky-300/30 blur-[130px]"
                 />
             </div>
 

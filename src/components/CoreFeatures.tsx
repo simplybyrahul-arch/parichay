@@ -75,7 +75,7 @@ const features = [
 
 export const CoreFeatures = () => {
     return (
-        <section className="py-32 px-6 bg-[#fdfbfb] relative border-y border-stone-200">
+        <section className="py-32 px-6 relative">
             <div className="max-w-6xl mx-auto">
 
                 <motion.div

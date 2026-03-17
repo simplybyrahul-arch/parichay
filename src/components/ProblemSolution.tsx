@@ -5,12 +5,7 @@ import Link from "next/link";
 
 export const ProblemSolution = () => {
     return (
-        <section className="py-32 px-6 bg-[#fffcf8] relative overflow-hidden">
-
-            {/* Background decorations (Warm) */}
-            <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-rose-200/40 blur-[120px] rounded-full pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-amber-200/40 blur-[120px] rounded-full pointer-events-none" />
-
+        <section className="py-32 px-6 relative overflow-hidden">
             <div className="max-w-6xl mx-auto relative z-10">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}

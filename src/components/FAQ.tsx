@@ -26,8 +26,8 @@ export const FAQ = () => {
     const [openIndex, setOpenIndex] = useState<number | null>(0);
 
     return (
-        <section className="py-32 px-6 bg-[#fffcf8]">
-            <div className="max-w-4xl mx-auto">
+        <section className="py-32 px-6 relative overflow-hidden">
+            <div className="max-w-4xl mx-auto relative z-10">
 
                 <div className="text-center mb-16">
                     <h2 className="text-4xl md:text-5xl font-black tracking-tight text-stone-900 mb-4 font-display">
@@ -49,7 +49,7 @@ export const FAQ = () => {
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: index * 0.1 }}
-                                className={`border rounded-2xl overflow-hidden transition-colors duration-300 shadow-sm ${isOpen ? "bg-white border-orange-200" : "bg-stone-50 border-stone-200 hover:border-orange-300"
+                                className={`border rounded-2xl overflow-hidden transition-colors duration-300 shadow-sm ${isOpen ? "bg-white/90 border-orange-200" : "bg-white/65 border-stone-200 hover:border-orange-300"
                                     }`}
                             >
                                 <button

@@ -22,8 +22,8 @@ const steps = [
 
 export const HowItWorks = () => {
     return (
-        <section className="py-32 px-6 bg-white relative">
-            <div className="max-w-6xl mx-auto">
+        <section className="py-32 px-6 relative overflow-hidden">
+            <div className="max-w-6xl mx-auto relative z-10">
 
                 <div className="text-center mb-20 relative z-10">
                     <motion.div

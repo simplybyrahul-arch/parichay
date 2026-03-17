@@ -262,11 +262,23 @@ export default function BookingFlow() {
     );
 
     const handleBackNavigation = () => {
-        if (window.history.length > 1) {
-            router.back();
+        if (mode === "quick") {
+            if (step > 1) {
+                setStep(step - 1);
+                return;
+            }
+            setMode("selection");
+            setStep(1);
             return;
         }
-        router.push('/');
+
+        if (mode !== "selection") {
+            setMode("selection");
+            setStep(1);
+            return;
+        }
+
+        router.back();
     };
 
     return (
