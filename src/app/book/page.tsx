@@ -520,15 +520,7 @@ export default function BookingFlow() {
                                             Next
                                         </button>
                                     </div>
-                                    <div className="flex gap-3">
-                                        <button onClick={() => setStep(2)} className="flex-1 py-4 bg-stone-100 text-stone-700 font-bold rounded-xl hover:bg-stone-200 transition-colors">Back</button>
-                                        <button
-                                            onClick={() => { if (!bookingDate) { toast.error("Please select a date."); return; } setStep(4); }}
-                                            className="flex-[2] py-4 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors"
-                                        >
-                                            Next
-                                        </button>
-                                    </div>
+                                    
                                 </div>
                             )}
 
