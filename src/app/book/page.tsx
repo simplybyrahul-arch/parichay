@@ -110,7 +110,8 @@ export default function BookingFlow() {
     const [videoCount, setVideoCount] = useState(1);
     // Step 3: Date
     const [bookingDate, setBookingDate] = useState("");
-    // Step 4: Budget slider
+    const  [bookingLocation, setBookingLocation] = useState("");
+     // Step 4: Budget slider
     const [budgetValue, setBudgetValue] = useState(50000);
     const [isFixedBudget, setIsFixedBudget] = useState(false);
     const [fixedBudgetAmount, setFixedBudgetAmount] = useState("");
@@ -498,6 +499,26 @@ export default function BookingFlow() {
                                             onChange={(e) => setBookingDate(e.target.value)}
                                             className="w-full p-4 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                                         />
+                                    </div>
+                                     <div>
+                                        <label htmlFor="quick-booking-location" className="block text-sm font-bold text-stone-700 mb-2">Shoot Location</label>
+                                        <input
+                                            id="quick-booking-location"
+                                            aria-label="Shoot location"
+                                            type="text"
+                                            value={bookingLocation}
+                                            onChange={(e) => setBookingLocation(e.target.value)}
+                                            className="w-full p-4 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                        />
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setStep(2)} className="flex-1 py-4 bg-stone-100 text-stone-700 font-bold rounded-xl hover:bg-stone-200 transition-colors">Back</button>
+                                        <button
+                                            onClick={() => { if (!bookingDate) { toast.error("Please select a date."); return; } setStep(4); }}
+                                            className="flex-[2] py-4 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors"
+                                        >
+                                            Next
+                                        </button>
                                     </div>
                                     <div className="flex gap-3">
                                         <button onClick={() => setStep(2)} className="flex-1 py-4 bg-stone-100 text-stone-700 font-bold rounded-xl hover:bg-stone-200 transition-colors">Back</button>
