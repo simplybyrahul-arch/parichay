@@ -24,22 +24,25 @@ export const Header = () => {
             <Link href="/" className="text-xl md:text-2xl font-black tracking-tight text-stone-900 hover:text-orange-600 transition-colors">
                 ShotcutCrew
             </Link>
+            <div className="hidden md:flex items-center gap-8 mx-6 text-sm font-bold text-stone-600">
+                <Link href="/search" className="hover:text-orange-600 transition-colors">Find Creators</Link>
+                <Link href="#how-it-works" className="hover:text-orange-600 transition-colors">How It Works</Link>
+                <Link href="/creators" className="hover:text-orange-600 transition-colors">For Creators</Link>
+                <Link href="#about" className="hover:text-orange-600 transition-colors">About</Link>
+            </div>
+            
             <div className="flex items-center gap-4">
-                <Link href="/search" className="text-stone-500 hover:text-orange-500 transition-colors hidden sm:flex items-center gap-2 text-sm font-bold bg-stone-50 px-4 py-2 rounded-full border border-stone-200 hover:border-orange-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
-                    Find Creators
-                </Link>
                 {isLoggedIn ? (
                     <Link href={dashboardUrl} className="text-sm font-bold bg-stone-900 text-white px-5 py-2.5 rounded-full hover:bg-stone-800 transition-colors shadow-sm">
                         Go to Dashboard
                     </Link>
                 ) : (
                     <>
-                        <Link href="/login" className="text-sm font-bold text-stone-700 hover:text-stone-900 transition-colors">
+                        <Link href="/login" className="hidden sm:block text-sm font-bold text-stone-700 hover:text-stone-900 transition-colors">
                             Login
                         </Link>
-                        <Link href="/signup" className="text-sm font-bold bg-stone-900 text-white px-5 py-2.5 rounded-full hover:bg-stone-800 transition-colors shadow-sm">
-                            Sign Up
+                        <Link href="/book" className="text-sm font-bold bg-orange-600 text-white px-5 py-2.5 rounded-full hover:bg-orange-700 transition-colors shadow-sm flex items-center gap-1.5 group">
+                            Book a Crew <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                         </Link>
                     </>
                 )}

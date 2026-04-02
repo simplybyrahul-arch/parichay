@@ -1,20 +1,22 @@
 import { Hero } from "@/components/Hero";
 import { SocialProof } from "@/components/SocialProof";
-import { TrustSection } from "@/components/TrustSection";
 import { ProblemSolution } from "@/components/ProblemSolution";
 import { HowItWorks } from "@/components/HowItWorks";
 import { CoreFeatures } from "@/components/CoreFeatures";
+import { TrustSection } from "@/components/TrustSection";
+import { CreatorTiersAndAudience } from "@/components/CreatorTiersAndAudience";
+import { AboutCredibility } from "@/components/AboutCredibility";
 import { FAQ } from "@/components/FAQ";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "ShotcutCrew | The Creative Production Marketplace",
-  description: "Book verified photographers, videographers, and pro crews instantly. Streamline your creative production with ShotcutCrew.",
+  title: "Shotcutcrew | India's First Verified Creative Production Marketplace",
+  description: "Plan, assemble and execute on demand. Shotcutcrew connects clients with verified photographers, videographers, editors, studios and equipment providers.",
   openGraph: {
-    title: "ShotcutCrew | The Creative Production Marketplace",
-    description: "Book verified photographers, videographers, and pro crews instantly. Streamline your creative production with ShotcutCrew.",
+    title: "Shotcutcrew | India's First Verified Creative Production Marketplace",
+    description: "Plan, assemble and execute on demand. Shotcutcrew connects clients with verified photographers, videographers, editors, studios and equipment providers.",
   },
 };
 
@@ -22,10 +24,10 @@ export default function Home() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "ShotcutCrew",
-    url: "https://shotcutcrew.com", // Replace with production URL
-    logo: "https://shotcutcrew.com/logo.png", // Replace with production URL
-    description: "AI-Enabled Creative Production Marketplace connecting clients with verified creative professionals.",
+    name: "Shotcutcrew",
+    url: "https://shotcutcrew.com",
+    logo: "https://shotcutcrew.com/logo.jpg",
+    description: "AI-powered planning and blockchain-secured payments built in from the start.",
     sameAs: [
       "https://twitter.com/shotcutcrew",
       "https://instagram.com/shotcutcrew"
@@ -44,10 +46,12 @@ export default function Home() {
         <Header />
         <Hero />
         <SocialProof />
-        <TrustSection />
         <ProblemSolution />
         <HowItWorks />
         <CoreFeatures />
+        <TrustSection />
+        <CreatorTiersAndAudience />
+        <AboutCredibility />
         <FAQ />
         <Footer />
       </div>

@@ -5,20 +5,28 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const faqs = [
     {
-        question: "How are creators vetted on ShotcutCrew?",
-        answer: "Every creator goes through a 3-step verification process focusing on portfolio quality, client references, and professional reliability before they are listed on our marketplace.",
+        question: "How are creators verified on Shotcutcrew?",
+        answer: "Every creator goes through KYC, portfolio review and reference checks before being listed. Their credentials are then issued as blockchain-verified identities — permanently verifiable by any client on the platform.",
     },
     {
-        question: "Does ShotcutCrew handle the payments?",
-        answer: "Yes. Payments are held securely in escrow and released upon completion of agreed-upon milestones, protecting both the client and the creator.",
+        question: "How does escrow payment work?",
+        answer: "When you book a shoot, your payment is locked in a smart contract. Funds are only released in milestones as deliverables are confirmed — protecting you at every stage of the project.",
     },
     {
-        question: "How does the Style-Matching AI work?",
-        answer: "When you upload a moodboard or visual references, our engine analyzes coloring, composition, and thematic elements to surface creators whose past work aligns perfectly with your vision.",
+        question: "Can I book a full production crew at once?",
+        answer: "Yes. Use Builder Mode to assemble a complete crew — DOP, photographer, editor, equipment — and get a real-time cost estimate before you confirm.",
     },
     {
-        question: "Can I book a full crew at once?",
-        answer: "Absolutely. Our Builder Mode allows you to select a Director, DOP, Gaffers, and Editors, then coordinates their availability to streamline the entire hiring process.",
+        question: "How does AI Script Analysis work?",
+        answer: "Upload your script or production brief. Our AI reads the requirements and outputs an estimated crew size, equipment list, timeline and budget — in seconds.",
+    },
+    {
+        question: "Is Shotcutcrew available outside Bilaspur?",
+        answer: "We're launching in Bilaspur, Chhattisgarh first — then scaling to major metros and nationally. Sign up to be notified when we launch in your city.",
+    },
+    {
+        question: "I'm a creator. How do I join?",
+        answer: "Click \"Join as Creator\", complete your profile and verification, and you'll be live on the platform. Top-rated creators get priority placement and premium shoot opportunities.",
     }
 ];
 

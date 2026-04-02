@@ -27,10 +27,10 @@ export const metadata: Metadata = {
   creator: "ShotcutCrew",
   icons: {
     icon: [
-      { url: "/icon.png", type: "image/png" },
+      { url: "/logo.jpg", type: "image/jpeg" },
     ],
-    shortcut: "/icon.png",
-    apple: [{ url: "/apple-icon.png", type: "image/png" }],
+    shortcut: "/logo.jpg",
+    apple: [{ url: "/logo.jpg", type: "image/jpeg" }],
   },
   openGraph: {
     type: "website",
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     siteName: "ShotcutCrew",
     images: [
       {
-        url: "/og-image.png",
+        url: "/logo.jpg",
         width: 1200,
         height: 630,
         alt: "ShotcutCrew - Creative Production Marketplace",
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "ShotcutCrew | AI-Enabled Creative Production Marketplace",
     description: "Connect with verified photographers, videographers, and full production crews through a transparent, structured booking ecosystem.",
-    images: ["/og-image.png"],
+    images: ["/logo.jpg"],
   },
   robots: {
     index: true,

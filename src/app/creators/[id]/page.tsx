@@ -27,7 +27,7 @@ export async function generateMetadata(
     const name = (usersData as { full_name?: string })?.full_name || "Creator";
     const role = data?.role || "Creator";
     const bio = data?.bio || "Profile details are being updated.";
-    const image = data?.profile_image_url || "/logo.png";
+    const image = data?.profile_image_url || "/logo.jpg";
 
     return {
         title: `${name} - ${role}`,
@@ -71,8 +71,8 @@ export default async function CreatorProfilePage({ params }: Props) {
         reviews: 0,
         verified: Boolean(dbCreator.verified),
         bio: dbCreator.bio || "No bio available.",
-        avatar: dbCreator.profile_image_url || "/logo.png",
-        coverImage: "/og-image.png",
+        avatar: dbCreator.profile_image_url || "/logo.jpg",
+        coverImage: "/logo.jpg",
         tags: Array.isArray(dbCreator.tags) ? dbCreator.tags : [],
         stats: {
             jobsCompleted: completedProjects.length,
@@ -90,8 +90,8 @@ export default async function CreatorProfilePage({ params }: Props) {
         reviews: 0,
         verified: false,
         bio: "This creator has not completed their public profile yet.",
-        avatar: "/logo.png",
-        coverImage: "/og-image.png",
+        avatar: "/logo.jpg",
+        coverImage: "/logo.jpg",
         tags: [],
         stats: {
             jobsCompleted: 0,
