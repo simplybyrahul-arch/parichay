@@ -57,8 +57,8 @@ export const Hero = () => {
                     transition={{ duration: 0.5, delay: 0.1 }}
                     className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight text-stone-900 mb-6 leading-[1.1] font-display"
                 >
-                    The Future of <br className="hidden md:block" />
-                    <span className="text-gradient from-orange-600 to-rose-500">Creative Production</span>
+                    India's Creative <br className="hidden md:block" />
+                    <span className="text-gradient from-orange-600 to-rose-500">Production Marketplace</span>
                 </motion.h1>
 
                 <motion.p
@@ -67,7 +67,7 @@ export const Hero = () => {
                     transition={{ duration: 0.5, delay: 0.2 }}
                     className="text-lg md:text-2xl text-stone-700 mb-12 max-w-3xl mx-auto font-medium leading-relaxed drop-shadow-sm"
                 >
-                    Connect with verified photographers, videographers, and full production crews through a transparent, AI-enabled booking ecosystem.
+                    Plan, assemble and execute professional shoots — with verified crew, AI planning and blockchain-secured payments.
                 </motion.p>
 
                 <motion.div
@@ -91,6 +91,15 @@ export const Hero = () => {
                         <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                     </Link>
                 </motion.div>
+
+                <motion.p
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.4 }}
+                    className="mt-8 text-sm md:text-base text-stone-500 font-medium max-w-2xl mx-auto"
+                >
+                    Built on 8+ years of real production experience in India. Powered by Hyperledger Fabric.
+                </motion.p>
             </div>
         </section>
     );

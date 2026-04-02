@@ -1,5 +1,6 @@
 import { Hero } from "@/components/Hero";
 import { SocialProof } from "@/components/SocialProof";
+import { TrustSection } from "@/components/TrustSection";
 import { ProblemSolution } from "@/components/ProblemSolution";
 import { HowItWorks } from "@/components/HowItWorks";
 import { CoreFeatures } from "@/components/CoreFeatures";
@@ -43,6 +44,7 @@ export default function Home() {
         <Header />
         <Hero />
         <SocialProof />
+        <TrustSection />
         <ProblemSolution />
         <HowItWorks />
         <CoreFeatures />
