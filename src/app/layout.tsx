@@ -27,10 +27,10 @@ export const metadata: Metadata = {
   creator: "ShotcutCrew",
   icons: {
     icon: [
-      { url: "/logo.jpg", type: "image/jpeg" },
+      { url: "/icon.png", type: "image/png" },
     ],
-    shortcut: "/logo.jpg",
-    apple: [{ url: "/logo.jpg", type: "image/jpeg" }],
+    shortcut: "/icon.png",
+    apple: [{ url: "/icon.png", type: "image/png" }],
   },
   openGraph: {
     type: "website",
