@@ -18,12 +18,12 @@ export function BrandLogo({
 }: BrandLogoProps) {
   const logo = (
     <Image
-      src="/logo.png"
+      src="/logo.jpg"
       alt="ShotcutCrew"
       width={width}
       height={height}
       priority={priority}
-      className={className}
+      className={`mix-blend-multiply ${className}`}
     />
   );
 

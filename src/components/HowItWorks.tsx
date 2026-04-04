@@ -5,24 +5,24 @@ import { motion } from "framer-motion";
 const steps = [
     {
         icon: <Search className="w-6 h-6 text-blue-400" />,
-        title: "1. Discover & Match",
-        description: "Our AI engine analyzes your requirements and moodboard to instantly match you with verified creators.",
+        title: "01  DISCOVER & MATCH",
+        description: "Describe your shoot. Our AI analyses your requirements, style and budget — and instantly matches you with verified, available creators.",
     },
     {
         icon: <Construction className="w-6 h-6 text-purple-400" />,
-        title: "2. Build Your Crew",
-        description: "Review portfolios, compare rates, and assemble your entire production team in one structured workspace.",
+        title: "02  BUILD YOUR CREW",
+        description: "Browse verified portfolios, compare rates and assemble your complete production team in one structured workspace — no WhatsApp needed.",
     },
     {
         icon: <CreditCard className="w-6 h-6 text-emerald-400" />,
-        title: "3. Shoot & Pay Securely",
-        description: "Manage milestones and release payments only when deliverables meet the standardized quality checks.",
+        title: "03  SHOOT & PAY SECURELY",
+        description: "Funds are held in smart contract escrow and released only when deliverables are confirmed. Your money is protected at every milestone.",
     }
 ];
 
 export const HowItWorks = () => {
     return (
-        <section className="py-32 px-6 relative overflow-hidden">
+        <section id="how-it-works" className="py-32 px-6 relative overflow-hidden bg-white">
             <div className="max-w-6xl mx-auto relative z-10">
 
                 <div className="text-center mb-20 relative z-10">
@@ -32,17 +32,17 @@ export const HowItWorks = () => {
                         viewport={{ once: true }}
                         className="inline-flex items-center px-4 py-2 rounded-full border border-orange-200 bg-orange-50 text-orange-600 text-sm font-bold mb-6 tracking-wide uppercase"
                     >
-                        The Process
+                        THE PROCESS
                     </motion.div>
                     <motion.h2
                         initial={{ opacity: 0, y: 20 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
                         transition={{ delay: 0.1 }}
-                        className="text-4xl md:text-5xl font-black tracking-tight text-stone-900 font-display mb-6"
+                        className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-stone-900 font-display mb-6"
                     >
-                        From concept to wrap <br className="hidden md:block" />
-                        <span className="text-stone-400">in three simple steps.</span>
+                        From brief to shoot<br className="hidden md:block" />
+                        <span className="text-stone-400">in three steps.</span>
                     </motion.h2>
                 </div>
 
