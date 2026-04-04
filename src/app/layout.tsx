@@ -13,7 +13,7 @@ const outfit = Outfit({
   subsets: ["latin"],
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://shotcutcrew.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     siteName: "ShotcutCrew",
     images: [
       {
-        url: "/logo.jpg",
+        url: "https://shotcutcrew.com/logo.jpg",
         width: 1200,
         height: 630,
         alt: "ShotcutCrew - Creative Production Marketplace",
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "ShotcutCrew | AI-Enabled Creative Production Marketplace",
     description: "Connect with verified photographers, videographers, and full production crews through a transparent, structured booking ecosystem.",
-    images: ["/logo.jpg"],
+    images: ["https://shotcutcrew.com/logo.jpg"],
   },
   robots: {
     index: true,
