@@ -23,7 +23,7 @@ export function BrandLogo({
       width={width}
       height={height}
       priority={priority}
-      className={className}
+      className={`mix-blend-multiply ${className}`}
     />
   );
 
