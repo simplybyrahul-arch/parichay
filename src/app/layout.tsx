@@ -25,13 +25,6 @@ export const metadata: Metadata = {
   keywords: ["photography", "videography", "production crew", "creative marketplace", "book photographers", "find videographers", "ShotcutCrew"],
   authors: [{ name: "ShotcutCrew Team" }],
   creator: "ShotcutCrew",
-  icons: {
-    icon: [
-      { url: "/logo.jpg", type: "image/jpeg" },
-    ],
-    shortcut: "/logo.jpg",
-    apple: [{ url: "/logo.jpg", type: "image/jpeg" }],
-  },
   openGraph: {
     type: "website",
     locale: "en_IN",

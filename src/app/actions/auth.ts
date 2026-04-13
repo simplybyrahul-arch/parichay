@@ -7,11 +7,16 @@ import { createClient } from '@/utils/supabase/server'
 export async function login(formData: FormData) {
     const supabase = await createClient()
 
-    // type-casting here for convenience
-    // in practice, you should validate your inputs
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+
+    if (!email || !password || email.length < 5) {
+        redirect('/login?error=Invalid input provided')
+    }
+
     const data = {
-        email: formData.get('email') as string,
-        password: formData.get('password') as string,
+        email: email.trim(),
+        password: password,
     }
 
     const { data: { session }, error } = await supabase.auth.signInWithPassword(data)
@@ -36,12 +41,20 @@ export async function login(formData: FormData) {
 export async function signup(formData: FormData, accountType: string, creatorType?: string) {
     const supabase = await createClient()
 
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+    const name = formData.get('name') as string
+
+    if (!email || !password || !name || password.length < 6) {
+        redirect('/signup?error=Invalid registration payload provided')
+    }
+
     const data = {
-        email: formData.get('email') as string,
-        password: formData.get('password') as string,
+        email: email.trim(),
+        password: password,
         options: {
             data: {
-                full_name: formData.get('name') as string,
+                full_name: name.trim(),
                 account_type: accountType,
                 ...(creatorType ? { creator_type: creatorType } : {}),
             }

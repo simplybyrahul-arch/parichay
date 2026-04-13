@@ -1,1 +1,0 @@
-﻿src/app/creators/[id]/page.tsx(62,31): error TS2339: Property 'full_name' does not exist on type '{ full_name: any; }[]'.
