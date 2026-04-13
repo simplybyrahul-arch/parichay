@@ -102,7 +102,6 @@ Branding has been updated from older naming to **ShotcutCrew** across metadata, 
 
 ## Documentation Index
 
-- `docs/CLIENT_CHANGE_VERIFICATION.md`
 - `docs/FEATURES.md`
 - `docs/API.md`
 - `docs/DEPLOYMENT.md`
