@@ -108,6 +108,7 @@ export default function CreatorDashboard() {
     const [location, setLocation] = useState("");
     const [dayRate, setDayRate] = useState<number | string>(0);
     const [portfolioUrl, setPortfolioUrl] = useState("");
+    const [portfolioItems, setPortfolioItems] = useState<{id: string, url: string}[]>([]);
 
     // SWR Hooks
     const { data: requests = [], isValidating: loading, mutate: mutateRequests } = useSWR(
@@ -123,7 +124,17 @@ export default function CreatorDashboard() {
                 setBio(data.bio);
                 setLocation(data.location);
                 setDayRate(data.day_rate);
-                setPortfolioUrl(data.portfolio_url || "");
+                let parsedLink = data.portfolio_url || "";
+                let parsedItems = [];
+                try {
+                    const parsed = JSON.parse(data.portfolio_url || "{}");
+                    if (parsed.link !== undefined) {
+                        parsedLink = parsed.link;
+                        parsedItems = parsed.items || [];
+                    }
+                } catch(e) {}
+                setPortfolioUrl(parsedLink);
+                setPortfolioItems(parsedItems);
             }
         }
     );
@@ -202,7 +213,7 @@ export default function CreatorDashboard() {
                     bio,
                     location,
                     day_rate: numDayRate,
-                    portfolio_url: portfolioUrl
+                    portfolio_url: JSON.stringify({ link: portfolioUrl, items: portfolioItems })
                 }).eq('id', userId);
 
                 if (error) reject(error);
@@ -216,7 +227,7 @@ export default function CreatorDashboard() {
                     bio,
                     location: location || "Remote",
                     day_rate: numDayRate,
-                    portfolio_url: portfolioUrl
+                    portfolio_url: JSON.stringify({ link: portfolioUrl, items: portfolioItems })
                 });
 
                 if (error) reject(error);
@@ -636,24 +647,26 @@ export default function CreatorDashboard() {
                                             </div>
 
                                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                                {/* Grid Image 1 */}
-                                                <div className="aspect-[4/5] rounded-xl overflow-hidden relative group cursor-pointer bg-stone-100">
-                                                    <img src="https://images.unsplash.com/photo-1579969035677-44f2d7a229ad?w=500&q=80" alt="Portfolio" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                                                    <div className="absolute inset-0 bg-stone-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                        <span className="text-white font-bold text-sm">Edit</span>
+                                                {portfolioItems.map((item) => (
+                                                    <div key={item.id} className="aspect-[4/5] rounded-xl overflow-hidden relative group cursor-pointer bg-stone-100">
+                                                        <img src={item.url} alt="Portfolio" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                                        <div className="absolute inset-0 bg-stone-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <button onClick={() => setPortfolioItems(prev => prev.filter(p => p.id !== item.id))} className="text-white font-bold text-sm hover:text-red-400">Remove</button>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                {/* Grid Image 2 */}
-                                                <div className="aspect-[4/5] rounded-xl overflow-hidden relative group cursor-pointer bg-stone-100">
-                                                    <img src="https://images.unsplash.com/photo-1621618844896-1ca0eb1ce9a4?w=500&q=80" alt="Portfolio" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                                                    <div className="absolute inset-0 bg-stone-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                        <span className="text-white font-bold text-sm">Edit</span>
-                                                    </div>
-                                                </div>
+                                                ))}
                                                 {/* Add New */}
-                                                <div className="aspect-[4/5] rounded-xl border-2 border-dashed border-stone-200 hover:border-rose-300 hover:bg-rose-50 transition-colors flex flex-col items-center justify-center text-stone-400 group cursor-pointer">
+                                                <div 
+                                                    onClick={() => {
+                                                        const url = window.prompt("Enter image URL:");
+                                                        if (url) {
+                                                            setPortfolioItems(prev => [...prev, { id: Date.now().toString(), url }]);
+                                                        }
+                                                    }}
+                                                    className="aspect-[4/5] rounded-xl border-2 border-dashed border-stone-200 hover:border-rose-300 hover:bg-rose-50 transition-colors flex flex-col items-center justify-center text-stone-400 group cursor-pointer"
+                                                >
                                                     <Plus className="w-8 h-8 mb-2 group-hover:text-rose-500" />
-                                                    <span className="text-sm font-medium group-hover:text-rose-600">Add Project</span>
+                                                    <span className="text-sm font-medium group-hover:text-rose-600">Add Project URL</span>
                                                 </div>
                                             </div>
                                         </section>

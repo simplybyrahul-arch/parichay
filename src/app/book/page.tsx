@@ -15,6 +15,7 @@ export default function BookingFlow() {
     const [mode, setMode] = useState<"selection" | "quick" | "builder" | "equipment" | "script">("selection");
     const [step, setStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [matchedCreators, setMatchedCreators] = useState<any[]>([]);
     const router = useRouter();
     const supabase = createClient();
 
@@ -240,6 +241,15 @@ export default function BookingFlow() {
                 status: "pending"
             });
             if (error) throw error;
+
+            // Fetch matched creators
+            const { data: matches } = await supabase
+                .from('creators')
+                .select('*, users ( full_name )')
+                .eq('verified', true)
+                .limit(3);
+            if (matches) setMatchedCreators(matches);
+
             setStep(5); // Success step
         } catch (error: unknown) {
             toast.error((error as Error).message || "Failed to process quick booking.");
@@ -598,16 +608,45 @@ export default function BookingFlow() {
 
                             {/* Step 5: Success */}
                             {step === 5 && (
-                                <div className="space-y-8 text-center pt-8">
-                                    <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                                        <CheckCircle className="w-10 h-10" />
+                                <div className="space-y-8 pt-8">
+                                    <div className="text-center">
+                                        <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                                            <CheckCircle className="w-10 h-10" />
+                                        </div>
+                                        <h2 className="text-3xl font-black text-stone-900 mb-2 font-display">Request Submitted!</h2>
+                                        <p className="text-stone-500 max-w-lg mx-auto">
+                                            Your requirement has been posted. Here are your top AI-matched creators based on your event and budget:
+                                        </p>
                                     </div>
-                                    <h2 className="text-3xl font-black text-stone-900 mb-2 font-display">Request Submitted!</h2>
-                                    <p className="text-stone-500 max-w-sm mx-auto">
-                                        Our AI is scanning verified profiles. We will notify you with the top 3 matches within the next hour.
-                                    </p>
+
+                                    {matchedCreators.length > 0 && (
+                                        <div className="grid md:grid-cols-3 gap-4 mt-8">
+                                            {matchedCreators.map((creator) => {
+                                                const name = Array.isArray(creator.users) ? creator.users[0]?.full_name : creator.users?.full_name;
+                                                return (
+                                                    <div key={creator.id} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left flex flex-col hover:border-orange-500 transition-colors shadow-sm">
+                                                        <img src={creator.profile_image_url || "/logo.jpg"} alt={name} className="w-16 h-16 rounded-full object-cover mb-4 shadow" />
+                                                        <h3 className="font-bold text-stone-900 truncate">{name || "Verified Creator"}</h3>
+                                                        <p className="text-sm text-orange-600 font-bold mb-2">{creator.role}</p>
+                                                        <p className="text-xs text-stone-500 mb-4 line-clamp-3">{creator.bio}</p>
+                                                        
+                                                        <div className="mt-auto pt-4 border-t border-stone-200">
+                                                            <div className="flex justify-between items-center mb-3">
+                                                                <span className="text-sm font-black text-stone-900">₹{creator.day_rate?.toLocaleString('en-IN')}/day</span>
+                                                                <span className="text-xs font-semibold text-stone-500 bg-stone-200/50 px-2 py-1 rounded-md max-w-[50%] truncate text-right">{creator.location}</span>
+                                                            </div>
+                                                            <button onClick={() => router.push(`/creators/${creator.id}`)} className="w-full py-2.5 bg-white border border-stone-200 text-stone-900 font-bold rounded-xl hover:bg-orange-50 hover:border-orange-200 hover:text-orange-700 transition-colors text-sm flex justify-center items-center gap-2 group">
+                                                                View Full Profile <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+
                                     <button onClick={() => router.push('/dashboard')} className="w-full py-4 bg-stone-900 text-white font-bold rounded-xl hover:bg-stone-800 transition-colors mt-8">
-                                        View Dashboard
+                                        View Dashboard Requests
                                     </button>
                                 </div>
                             )}
