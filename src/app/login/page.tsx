@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Mail, Lock, Sparkles } from "lucide-react";
+import { ArrowRight, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { login } from "../actions/auth";
@@ -10,6 +10,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
 
@@ -17,6 +18,21 @@ export default function LoginPage() {
         e.preventDefault();
         setLoading(true);
         setErrorMsg("");
+
+        // 1. Validate Email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            setErrorMsg("Please enter a valid email address.");
+            setLoading(false);
+            return;
+        }
+
+        // 2. Validate Password Length
+        if (password.length < 8) {
+            setErrorMsg("Password must be at least 8 characters long.");
+            setLoading(false);
+            return;
+        }
 
         try {
             const data = new FormData();
@@ -77,18 +93,26 @@ export default function LoginPage() {
                     <div>
                         <label className="block text-sm font-bold text-stone-700 mb-1.5 flex justify-between">
                             Password
-                            <a href="#" className="text-orange-600 font-semibold hover:text-orange-700 text-xs">Forgot?</a>
+                            <Link href="/forgot-password" className="text-orange-600 font-semibold hover:text-orange-700 text-xs">Forgot?</Link>
                         </label>
                         <div className="relative">
                             <Lock className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
                             <input
-                                type="password"
+                                type={showPassword ? "text" : "password"}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                placeholder="••••••••"
+                                placeholder="Min. 8 characters"
                                 required
-                                className="w-full pl-12 pr-4 py-4 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+                                minLength={8}
+                                className="w-full pl-12 pr-12 py-4 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
                             />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 transition-colors p-1"
+                            >
+                                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            </button>
                         </div>
                     </div>
 

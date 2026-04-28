@@ -10,7 +10,7 @@ export async function login(formData: FormData) {
     const email = formData.get('email') as string
     const password = formData.get('password') as string
 
-    if (!email || !password || email.length < 5) {
+    if (!email || !password || email.length < 5 || password.length < 8) {
         redirect('/login?error=Invalid input provided')
     }
 
@@ -45,7 +45,7 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
     const password = formData.get('password') as string
     const name = formData.get('name') as string
 
-    if (!email || !password || !name || password.length < 6) {
+    if (!email || !password || !name || password.length < 8) {
         redirect('/signup?error=Invalid registration payload provided')
     }
 
@@ -80,4 +80,23 @@ export async function logout() {
     await supabase.auth.signOut()
     revalidatePath('/', 'layout')
     redirect('/login')
+}
+
+export async function requestPasswordReset(formData: FormData) {
+    const supabase = await createClient()
+    const email = formData.get('email') as string
+    
+    if (!email) {
+        return { error: 'Email is required' }
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/update-password`,
+    })
+
+    if (error) {
+        return { error: error.message }
+    }
+    
+    return { success: true }
 }
