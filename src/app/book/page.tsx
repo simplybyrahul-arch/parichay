@@ -622,11 +622,13 @@ export default function BookingFlow() {
                                     {matchedCreators.length > 0 && (
                                         <div className="grid md:grid-cols-3 gap-4 mt-8">
                                             {matchedCreators.map((creator) => {
-                                                const name = Array.isArray(creator.users) ? creator.users[0]?.full_name : creator.users?.full_name;
+                                                const dbName = Array.isArray(creator.users) ? creator.users[0]?.full_name : creator.users?.full_name;
+                                                const parsedName = creator.slug ? creator.slug.replace(/-\d+$/, '').split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') : null;
+                                                const name = dbName || parsedName || "Verified Creator";
                                                 return (
                                                     <div key={creator.id} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left flex flex-col hover:border-orange-500 transition-colors shadow-sm">
                                                         <img src={creator.profile_image_url || "/logo.jpg"} alt={name} className="w-16 h-16 rounded-full object-cover mb-4 shadow" />
-                                                        <h3 className="font-bold text-stone-900 truncate">{name || "Verified Creator"}</h3>
+                                                        <h3 className="font-bold text-stone-900 truncate">{name}</h3>
                                                         <p className="text-sm text-orange-600 font-bold mb-2">{creator.role}</p>
                                                         <p className="text-xs text-stone-500 mb-4 line-clamp-3">{creator.bio}</p>
                                                         
