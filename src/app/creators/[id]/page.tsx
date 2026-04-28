@@ -79,7 +79,17 @@ export default async function CreatorProfilePage({ params }: Props) {
             repeatClients: `${uniqueClients.size}`,
             responseTime: "N/A",
         },
-        portfolio: [],
+        portfolio: (() => {
+            try {
+                const parsed = JSON.parse(dbCreator.portfolio_url || "{}");
+                return Array.isArray(parsed.items) ? parsed.items.map((img: any) => ({
+                    id: img.id,
+                    url: img.url,
+                    title: "Portfolio Item",
+                    type: "image"
+                })) : [];
+            } catch { return []; }
+        })(),
         services: dbCreator.day_rate ? [{ name: "Base Day Rate", price: `₹${Number(dbCreator.day_rate).toLocaleString()}`, time: "Per Day" }] : [],
     } : {
         id: params.id,
