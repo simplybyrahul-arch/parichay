@@ -13,7 +13,6 @@ import {
     MoreVertical,
     Camera,
     CheckCircle,
-    Clock,
     Inbox,
     Star,
     PenTool,
@@ -132,7 +131,7 @@ export default function CreatorDashboard() {
                         parsedLink = parsed.link;
                         parsedItems = parsed.items || [];
                     }
-                } catch(e) {}
+                } catch {}
                 setPortfolioUrl(parsedLink);
                 setPortfolioItems(parsedItems);
             }
@@ -649,6 +648,7 @@ export default function CreatorDashboard() {
                                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                                 {portfolioItems.map((item) => (
                                                     <div key={item.id} className="aspect-[4/5] rounded-xl overflow-hidden relative group cursor-pointer bg-stone-100">
+                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                                         <img src={item.url} alt="Portfolio" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                                                         <div className="absolute inset-0 bg-stone-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                             <button onClick={() => setPortfolioItems(prev => prev.filter(p => p.id !== item.id))} className="text-white font-bold text-sm hover:text-red-400">Remove</button>

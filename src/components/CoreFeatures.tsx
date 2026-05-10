@@ -1,5 +1,5 @@
 "use client";
-import { Zap, Construction, BrainCircuit, Video, ArrowRight } from "lucide-react";
+import { Zap, Construction, BrainCircuit, Video } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 

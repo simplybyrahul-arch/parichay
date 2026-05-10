@@ -1,5 +1,5 @@
 "use client";
-import { CheckCircle, Diamond, Navigation, Users, Building, Video } from "lucide-react";
+import { CheckCircle, Diamond, Navigation, Building, Video } from "lucide-react";
 import { motion } from "framer-motion";
 
 const tiers = [

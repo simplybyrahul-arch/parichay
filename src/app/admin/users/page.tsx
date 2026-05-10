@@ -5,13 +5,13 @@ export default async function UsersPage() {
     const supabase = await createClient();
 
     // Fetch all users
-    const { data: users, error: usersError } = await supabase
+    const { data: users } = await supabase
         .from("users")
         .select("*")
         .order("created_at", { ascending: false });
 
     // Fetch all creators (to get verified status)
-    const { data: creators, error: creatorsError } = await supabase
+    const { data: creators } = await supabase
         .from("creators")
         .select("*");
 

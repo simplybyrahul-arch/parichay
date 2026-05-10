@@ -1,6 +1,5 @@
 "use client";
 import { ArrowRight, Twitter, Instagram, Linkedin, Globe } from "lucide-react";
-import { BrandLogo } from "./BrandLogo";
 import Link from "next/link";
 
 export const Footer = () => {

@@ -22,8 +22,8 @@ export const SettingsForm = ({ settings }: { settings: Setting[] }) => {
         try {
             await updateSetting(key, localSettings[key]);
             toast.success("Setting updated safely");
-        } catch (error: any) {
-            toast.error(error.message || "Failed to update setting");
+        } catch (error: unknown) {
+            toast.error(error instanceof Error ? error.message : "Failed to update setting");
             // Revert on fail
             setLocalSettings(prev => ({
                 ...prev,

@@ -9,13 +9,26 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { BrandLogo } from "@/components/BrandLogo";
+
+type MatchedCreator = {
+    id: string;
+    role: string;
+    location: string;
+    day_rate: number;
+    verified: boolean;
+    slug?: string | null;
+    bio?: string | null;
+    profile_image_url?: string | null;
+    users?: { full_name?: string | null } | { full_name?: string | null }[] | null;
+};
 
 export default function BookingFlow() {
     const [mode, setMode] = useState<"selection" | "quick" | "builder" | "equipment" | "script">("selection");
     const [step, setStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [matchedCreators, setMatchedCreators] = useState<any[]>([]);
+    const [matchedCreators, setMatchedCreators] = useState<MatchedCreator[]>([]);
     const router = useRouter();
     const supabase = createClient();
 
@@ -627,7 +640,7 @@ export default function BookingFlow() {
                                                 const name = dbName || parsedName || "Verified Creator";
                                                 return (
                                                     <div key={creator.id} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left flex flex-col hover:border-orange-500 transition-colors shadow-sm">
-                                                        <img src={creator.profile_image_url || "/logo.jpg"} alt={name} className="w-16 h-16 rounded-full object-cover mb-4 shadow" />
+                                                        <Image src={creator.profile_image_url || "/logo.jpg"} alt={name} width={64} height={64} className="w-16 h-16 rounded-full object-cover mb-4 shadow" />
                                                         <h3 className="font-bold text-stone-900 truncate">{name}</h3>
                                                         <p className="text-sm text-orange-600 font-bold mb-2">{creator.role}</p>
                                                         <p className="text-xs text-stone-500 mb-4 line-clamp-3">{creator.bio}</p>

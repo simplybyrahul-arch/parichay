@@ -10,7 +10,7 @@ type AuditAction =
 export async function logAdminAction(
     action: AuditAction,
     targetId?: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
 ) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

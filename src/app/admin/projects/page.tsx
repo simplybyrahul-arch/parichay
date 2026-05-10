@@ -1,6 +1,20 @@
 import { createClient } from "@/utils/supabase/server";
 import { Clock, CheckCircle, FileText, Ban, PlayCircle } from "lucide-react";
 
+type RelatedName = {
+    full_name: string | null;
+} | null;
+
+type ProjectRow = {
+    id: string;
+    title: string;
+    budget: number;
+    status: string | null;
+    created_at: string;
+    client: RelatedName;
+    creator: RelatedName;
+};
+
 export default async function AdminProjectsPage() {
     const supabase = await createClient();
 
@@ -56,7 +70,7 @@ export default async function AdminProjectsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-stone-100">
-                            {projects?.map((project: any) => (
+                            {(projects as ProjectRow[] | null)?.map((project) => (
                                 <tr key={project.id} className="hover:bg-stone-50/50 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="font-medium text-stone-900">{project.title}</div>

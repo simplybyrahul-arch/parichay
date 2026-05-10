@@ -40,7 +40,7 @@ export default function LoginPage() {
             data.append("password", password);
 
             await login(data);
-        } catch (error) {
+        } catch {
             setErrorMsg("Invalid email or password. Please try again.");
             setLoading(false);
         }

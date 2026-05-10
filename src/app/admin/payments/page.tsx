@@ -1,6 +1,22 @@
 import { createClient } from "@/utils/supabase/server";
 import { ShieldCheck, XCircle } from "lucide-react";
 
+type RelatedName = {
+    full_name: string | null;
+} | null;
+
+type PaymentRow = {
+    id: string;
+    razorpay_order_id: string;
+    razorpay_payment_id: string | null;
+    amount: number;
+    currency: string | null;
+    status: string | null;
+    created_at: string;
+    client: RelatedName;
+    project: { title: string | null } | null;
+};
+
 export default async function AdminPaymentsPage() {
     const supabase = await createClient();
 
@@ -34,7 +50,7 @@ export default async function AdminPaymentsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-stone-100">
-                            {payments?.map((payment: any) => (
+                            {(payments as PaymentRow[] | null)?.map((payment) => (
                                 <tr key={payment.id} className="hover:bg-stone-50/50 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
@@ -49,7 +65,7 @@ export default async function AdminPaymentsPage() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="font-medium text-stone-900 truncate max-w-[200px]" title={payment.project?.title}>
+                                        <div className="font-medium text-stone-900 truncate max-w-[200px]" title={payment.project?.title || undefined}>
                                             {payment.project?.title || 'Unknown Project'}
                                         </div>
                                         <div className="text-xs text-stone-500 mt-0.5">{payment.client?.full_name || 'Unknown Client'}</div>

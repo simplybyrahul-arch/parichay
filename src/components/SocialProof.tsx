@@ -1,7 +1,5 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
-
 export const SocialProof = () => {
     return (
         <section className="py-8 bg-white border-y border-stone-200">
