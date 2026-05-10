@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Mail, Lock, User, Briefcase, Building2, CheckCircle } from "lucide-react";
+import { ArrowRight, Mail, Lock, User, Briefcase, Building2, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { signup } from "../actions/auth";
@@ -11,9 +11,13 @@ export default function SignupPage() {
     const [accountType, setAccountType] = useState<"client" | "creator" | null>(null);
     const [creatorType, setCreatorType] = useState<"studio_owner" | "freelancer" | null>(null);
     const [step, setStep] = useState(1); // 1=account type, 2=creator sub-type, 3=credentials
-    const [formData, setFormData] = useState({ name: "", email: "", password: "" });
+    const [formData, setFormData] = useState({ name: "", email: "", password: "", confirmPassword: "" });
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
+    
+    // UI state
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const handleTypeSelection = (type: "client" | "creator") => {
         setAccountType(type);
@@ -28,6 +32,28 @@ export default function SignupPage() {
         e.preventDefault();
         setLoading(true);
         setErrorMsg("");
+
+        // 1. Validate Email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+            setErrorMsg("Please enter a valid email address.");
+            setLoading(false);
+            return;
+        }
+
+        // 2. Validate Password Length
+        if (formData.password.length < 8) {
+            setErrorMsg("Password must be at least 8 characters long.");
+            setLoading(false);
+            return;
+        }
+
+        // 3. Confirm Password Match
+        if (formData.password !== formData.confirmPassword) {
+            setErrorMsg("Passwords do not match.");
+            setLoading(false);
+            return;
+        }
 
         try {
             const data = new FormData();
@@ -57,7 +83,7 @@ export default function SignupPage() {
                 </div>
 
                 <AnimatePresence mode="wait">
-                    {/* ... Step 1 code identical ... */}
+                    {/* STEP 1: Account Type Selection */}
                     {step === 1 && (
                         <motion.div
                             key="step1"
@@ -76,6 +102,7 @@ export default function SignupPage() {
                             <div className="grid md:grid-cols-2 gap-4">
                                 {/* Client Option */}
                                 <button
+                                    type="button"
                                     onClick={() => handleTypeSelection("client")}
                                     className="p-6 border-2 border-transparent bg-stone-50 rounded-2xl hover:border-orange-500 hover:bg-orange-50 transition-all text-left group relative overflow-hidden"
                                 >
@@ -88,6 +115,7 @@ export default function SignupPage() {
 
                                 {/* Studio Owner / Freelancer Option */}
                                 <button
+                                    type="button"
                                     onClick={() => handleTypeSelection("creator")}
                                     className="p-6 border-2 border-transparent bg-stone-50 rounded-2xl hover:border-rose-500 hover:bg-rose-50 transition-all text-left group relative overflow-hidden"
                                 >
@@ -110,7 +138,6 @@ export default function SignupPage() {
                         </motion.div>
                     )}
 
-                    {/* STEP 2: Credentials Form */}
                     {/* STEP 2: Creator Sub-Type Selection */}
                     {step === 2 && (
                         <motion.div
@@ -120,7 +147,7 @@ export default function SignupPage() {
                             exit={{ opacity: 0, x: -20 }}
                             className="bg-white p-8 md:p-10 rounded-[2rem] shadow-2xl shadow-stone-200/50 border border-stone-100"
                         >
-                            <button onClick={() => setStep(1)} className="text-stone-400 hover:text-stone-900 text-sm mb-6 transition-colors">
+                            <button onClick={() => setStep(1)} className="text-stone-400 hover:text-stone-900 text-sm mb-6 transition-colors font-bold">
                                 ← Back
                             </button>
 
@@ -167,14 +194,14 @@ export default function SignupPage() {
                             animate={{ opacity: 1, x: 0 }}
                             className="bg-white p-8 md:p-10 rounded-[2rem] shadow-2xl shadow-stone-200/50 border border-stone-100"
                         >
-                            <button onClick={() => accountType === "creator" ? setStep(2) : setStep(1)} className="text-stone-400 hover:text-stone-900 text-sm mb-6 transition-colors">
+                            <button onClick={() => accountType === "creator" ? setStep(2) : setStep(1)} className="text-stone-400 hover:text-stone-900 text-sm mb-6 transition-colors font-bold">
                                 ← Back
                             </button>
 
                             <h1 className="text-3xl font-black tracking-tight text-stone-900 mb-2 font-display">
                                 {accountType === "client" ? "Create Client Account" : creatorType === "studio_owner" ? "Create Studio Profile" : "Create Freelancer Profile"}
                             </h1>
-                            <p className="text-stone-500 font-medium pb-8 border-b border-stone-100 mb-8">
+                            <p className="text-stone-500 font-medium pb-6 border-b border-stone-100 mb-6">
                                 {accountType === "client"
                                     ? "Start hiring top-tier talent in minutes."
                                     : "Build your portfolio to start receiving briefs."}
@@ -222,13 +249,44 @@ export default function SignupPage() {
                                     <div className="relative">
                                         <Lock className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
                                         <input
-                                            type="password"
+                                            type={showPassword ? "text" : "password"}
                                             value={formData.password}
                                             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                            placeholder="••••••••"
+                                            placeholder="Min. 8 characters"
                                             required
-                                            className="w-full pl-12 pr-4 py-4 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+                                            minLength={8}
+                                            className="w-full pl-12 pr-12 py-4 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
                                         />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 transition-colors p-1"
+                                        >
+                                            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-stone-700 mb-1.5">Confirm Password</label>
+                                    <div className="relative">
+                                        <Lock className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
+                                        <input
+                                            type={showConfirmPassword ? "text" : "password"}
+                                            value={formData.confirmPassword}
+                                            onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                            placeholder="Re-enter password"
+                                            required
+                                            minLength={8}
+                                            className="w-full pl-12 pr-12 py-4 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 transition-colors p-1"
+                                        >
+                                            {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                        </button>
                                     </div>
                                 </div>
 
@@ -236,7 +294,7 @@ export default function SignupPage() {
                                 <label className="flex items-start gap-3 mt-4 cursor-pointer">
                                     <input type="checkbox" required className="mt-1 w-4 h-4 text-orange-600 rounded border-stone-300 focus:ring-orange-500" />
                                     <span className="text-sm text-stone-600 select-none">
-                                        I agree to the ShotcutCrew <span className="font-bold text-orange-600 hover:underline">Terms of Service</span> and <span className="font-bold text-orange-600 hover:underline">Privacy Policy</span>.
+                                        I agree to the ShotcutCrew <Link href="/terms" className="font-bold text-orange-600 hover:underline">Terms of Service</Link> and <Link href="/privacy" className="font-bold text-orange-600 hover:underline">Privacy Policy</Link>.
                                     </span>
                                 </label>
 

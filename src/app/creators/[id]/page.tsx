@@ -17,6 +17,7 @@ export async function generateMetadata(
         .select(`
             bio,
             role,
+            slug,
             profile_image_url,
             users ( full_name )
         `)
@@ -24,7 +25,8 @@ export async function generateMetadata(
         .single();
 
     const usersData = Array.isArray(data?.users) ? data.users[0] : data?.users;
-    const name = (usersData as { full_name?: string })?.full_name || "Creator";
+    const parsedName = data?.slug ? data.slug.replace(/-\d+$/, '').split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') : null;
+    const name = (usersData as { full_name?: string })?.full_name || parsedName || "Creator";
     const role = data?.role || "Creator";
     const bio = data?.bio || "Profile details are being updated.";
     const image = data?.profile_image_url || "/logo.jpg";
@@ -61,10 +63,11 @@ export default async function CreatorProfilePage({ params }: Props) {
     const uniqueClients = new Set(completedProjects.map((p) => p.client_id));
 
     const usersData = Array.isArray(dbCreator?.users) ? dbCreator.users[0] : dbCreator?.users;
+    const parsedName = dbCreator?.slug ? dbCreator.slug.replace(/-\d+$/, '').split('-').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') : null;
 
     const creator = dbCreator ? {
         id: dbCreator.id,
-        name: (usersData as { full_name?: string })?.full_name || "Creator",
+        name: (usersData as { full_name?: string })?.full_name || parsedName || "Creator",
         role: dbCreator.role || "Creator",
         location: dbCreator.location || "Location not set",
         rating: 0,

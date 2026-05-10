@@ -38,6 +38,7 @@ export default function SearchPage() {
             .from('creators')
             .select(`
                 id,
+                slug,
                 role,
                 location,
                 day_rate,
@@ -51,9 +52,12 @@ export default function SearchPage() {
 
         if (data && data.length > 0) {
             // Map Supabase data to component structure
-            return data.map((c: Record<string, unknown>) => ({
+            return data.map((c: Record<string, unknown>) => {
+                const dbName = (c.users as { full_name?: string })?.full_name;
+                const parsedName = c.slug ? (c.slug as string).replace(/-\d+$/, '').split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') : null;
+                return {
                 id: c.id as string,
-                name: (c.users as { full_name?: string })?.full_name || "Unknown Creator",
+                name: dbName || parsedName || "Unknown Creator",
                 role: c.role as string,
                 location: c.location as string,
                 rating: 0,
@@ -62,7 +66,8 @@ export default function SearchPage() {
                 verified: Boolean(c.verified),
                 image: (c.profile_image_url as string) || "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&q=80",
                 tags: (c.tags as string[]) || []
-            }));
+            };
+        });
         }
 
         return [];
