@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { logAdminAction } from "@/utils/audit-logger";
 
 // Higher Order Function to securely wrap Admin server actions
-export async function withAdminAuth<T extends any[], R>(
+export async function withAdminAuth<T extends unknown[], R>(
     action: (...args: T) => Promise<R>
 ): Promise<(...args: T) => Promise<R>> {
     return async (...args: T) => {

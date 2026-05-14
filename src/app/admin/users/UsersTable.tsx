@@ -1,7 +1,7 @@
 "use client";
 
 import { verifyCreator } from "@/app/actions/admin";
-import { CheckCircle, XCircle, MoreVertical } from "lucide-react";
+import { CheckCircle, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -22,8 +22,8 @@ export const UsersTable = ({ users }: { users: UserData[] }) => {
         try {
             await verifyCreator(userId, !currentStatus);
             toast.success(`Creator ${!currentStatus ? 'verified' : 'unverified'} successfully`);
-        } catch (error: any) {
-            toast.error(error.message || "Failed to update status");
+        } catch (error: unknown) {
+            toast.error(error instanceof Error ? error.message : "Failed to update status");
         } finally {
             setLoadingId(null);
         }

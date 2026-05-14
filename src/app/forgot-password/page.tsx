@@ -31,7 +31,7 @@ export default function ForgotPasswordPage() {
                 setSuccess(true);
                 setLoading(false);
             }
-        } catch (error) {
+        } catch {
             setErrorMsg("An unexpected error occurred. Please try again.");
             setLoading(false);
         }
@@ -69,7 +69,7 @@ export default function ForgotPasswordPage() {
                                     Reset password
                                 </h1>
                                 <p className="text-stone-500 font-medium pb-2 text-sm">
-                                    Enter your email address and we'll send you a link to reset your password.
+                                    Enter your email address and we&apos;ll send you a link to reset your password.
                                 </p>
                             </div>
 
@@ -120,14 +120,14 @@ export default function ForgotPasswordPage() {
                                 Check your email
                             </h1>
                             <p className="text-stone-500 font-medium text-sm mb-8 mx-auto">
-                                We've sent a password reset link to <span className="text-stone-900 font-bold">{email}</span>. Please check your inbox and spam folder.
+                                We&apos;ve sent a password reset link to <span className="text-stone-900 font-bold">{email}</span>. Please check your inbox and spam folder.
                             </p>
                             
                             <button
                                 onClick={() => setSuccess(false)}
                                 className="text-orange-600 text-sm font-bold hover:text-orange-700 transition-colors"
                             >
-                                Didn't receive it? Try again
+                                Didn&apos;t receive it? Try again
                             </button>
 
                             <div className="mt-8 pt-6 border-t border-stone-100">

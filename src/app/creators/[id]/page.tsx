@@ -1,15 +1,15 @@
-import { Metadata, ResolvingMetadata } from "next";
+import { Metadata } from "next";
 import CreatorProfileClient from "./CreatorProfileClient";
 import { createClient } from "@/utils/supabase/server";
 
 type Props = {
-    params: { id: string }
+    params: Promise<{ id: string }>
 };
 
 export async function generateMetadata(
-    { params }: Props,
-    parent: ResolvingMetadata
+    { params }: Props
 ): Promise<Metadata> {
+    const { id } = await params;
     const supabase = await createClient();
 
     const { data } = await supabase
@@ -21,7 +21,7 @@ export async function generateMetadata(
             profile_image_url,
             users ( full_name )
         `)
-        .eq('id', params.id)
+        .eq('id', id)
         .single();
 
     const usersData = Array.isArray(data?.users) ? data.users[0] : data?.users;
@@ -43,6 +43,7 @@ export async function generateMetadata(
 }
 
 export default async function CreatorProfilePage({ params }: Props) {
+    const { id } = await params;
     const supabase = await createClient();
 
     const { data: dbCreator } = await supabase
@@ -51,13 +52,13 @@ export default async function CreatorProfilePage({ params }: Props) {
             *,
             users ( full_name )
         `)
-        .eq('id', params.id)
+        .eq('id', id)
         .single();
 
     const { data: creatorProjects } = await supabase
         .from('projects')
         .select('id, client_id, status')
-        .eq('creator_id', params.id);
+        .eq('creator_id', id);
 
     const completedProjects = (creatorProjects || []).filter((p) => p.status === 'completed');
     const uniqueClients = new Set(completedProjects.map((p) => p.client_id));
@@ -85,7 +86,7 @@ export default async function CreatorProfilePage({ params }: Props) {
         portfolio: (() => {
             try {
                 const parsed = JSON.parse(dbCreator.portfolio_url || "{}");
-                return Array.isArray(parsed.items) ? parsed.items.map((img: any) => ({
+                return Array.isArray(parsed.items) ? parsed.items.map((img: { id: string; url: string }) => ({
                     id: img.id,
                     url: img.url,
                     title: "Portfolio Item",
@@ -95,7 +96,7 @@ export default async function CreatorProfilePage({ params }: Props) {
         })(),
         services: dbCreator.day_rate ? [{ name: "Base Day Rate", price: `₹${Number(dbCreator.day_rate).toLocaleString()}`, time: "Per Day" }] : [],
     } : {
-        id: params.id,
+        id,
         name: "Creator",
         role: "Creator",
         location: "Location not set",
@@ -122,7 +123,7 @@ export default async function CreatorProfilePage({ params }: Props) {
         jobTitle: creator.role,
         image: creator.avatar,
         description: creator.bio,
-        url: `https://shotcutcrew.com/creators/${params.id}`,
+        url: `https://shotcutcrew.com/creators/${id}`,
         address: {
             "@type": "PostalAddress",
             addressLocality: creator.location

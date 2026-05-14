@@ -34,7 +34,3 @@ create policy "Clients can insert payments."
   on public.payments for insert 
   with check ( auth.uid() = client_id );
 
--- Clients can update their own payments
-create policy "Clients can update their own payments." 
-  on public.payments for update 
-  using ( auth.uid() = client_id );

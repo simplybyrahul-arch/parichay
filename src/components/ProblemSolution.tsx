@@ -1,7 +1,6 @@
 "use client";
-import { Search, IndianRupee, Users, AlertTriangle, Lock, Smartphone, CheckCircle, Network, Layers, Globe } from "lucide-react";
+import { Search, IndianRupee, Users, AlertTriangle, Lock, Smartphone, Network, Layers, Globe } from "lucide-react";
 import { motion } from "framer-motion";
-import Link from "next/link";
 
 const problems = [
     {

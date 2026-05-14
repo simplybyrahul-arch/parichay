@@ -2,7 +2,23 @@
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
-export const AnalyticsCharts = ({ projectData, paymentData }: { projectData: any[], paymentData: any[] }) => {
+type ProjectChartPoint = {
+    date: string;
+    count: number;
+};
+
+type PaymentChartPoint = {
+    date: string;
+    amount: number;
+};
+
+export const AnalyticsCharts = ({
+    projectData,
+    paymentData,
+}: {
+    projectData: ProjectChartPoint[];
+    paymentData: PaymentChartPoint[];
+}) => {
     return (
         <div className="grid lg:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm">
@@ -31,7 +47,7 @@ export const AnalyticsCharts = ({ projectData, paymentData }: { projectData: any
                             <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#78716C', fontSize: 12}} dy={10} />
                             <YAxis axisLine={false} tickLine={false} tick={{fill: '#78716C', fontSize: 12}} dx={-10} tickFormatter={(value) => `₹${value}`} />
                             <Tooltip 
-                                formatter={(value: any) => [`₹${Number(value).toLocaleString()}`, 'Volume']}
+                                formatter={(value: unknown) => [`₹${Number(value || 0).toLocaleString()}`, 'Volume']}
                                 contentStyle={{ borderRadius: '12px', border: '1px solid #E7E5E4', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                             />
                             <Bar dataKey="amount" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={50} />

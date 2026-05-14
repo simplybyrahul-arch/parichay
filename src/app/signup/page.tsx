@@ -62,7 +62,7 @@ export default function SignupPage() {
             data.append("password", formData.password);
 
             await signup(data, accountType || "client", creatorType || undefined);
-        } catch (error) {
+        } catch {
             setErrorMsg("Failed to create account. Please try again.");
             setLoading(false);
         }

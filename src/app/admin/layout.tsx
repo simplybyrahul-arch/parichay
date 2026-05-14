@@ -21,7 +21,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             toast.success("Logged out successfully");
             router.push("/login");
             router.refresh();
-        } catch (error) {
+        } catch {
             toast.error("Failed to log out");
         }
     }, [supabase, router]);

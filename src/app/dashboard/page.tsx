@@ -11,9 +11,7 @@ import {
     Bell,
     Search,
     MoreVertical,
-    CheckCircle,
     Clock,
-    AlertCircle,
     LogOut
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";

@@ -2,13 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import Razorpay from "razorpay";
 import { createClient } from "@/utils/supabase/server";
 
-const razorpay = new Razorpay({
-    key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || "rzp_test_placeholder",
-    key_secret: process.env.RAZORPAY_KEY_SECRET || "placeholder_secret",
-});
+function getRequiredEnv(name: string) {
+    const value = process.env[name];
+    if (!value) {
+        throw new Error(`${name} is not configured`);
+    }
+    return value;
+}
+
+function getRazorpayKeyId() {
+    return process.env.RAZORPAY_KEY_ID || getRequiredEnv("NEXT_PUBLIC_RAZORPAY_KEY_ID");
+}
 
 export async function POST(req: NextRequest) {
     try {
+        const razorpay = new Razorpay({
+            key_id: getRazorpayKeyId(),
+            key_secret: getRequiredEnv("RAZORPAY_KEY_SECRET"),
+        });
+
         const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
 
