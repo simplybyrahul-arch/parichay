@@ -30,6 +30,7 @@ import { logout } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
 import { listCreatorOpportunities, respondToOpportunity, type CreatorOpportunity } from "../actions/opportunities";
 import { startAssignedProject } from "../actions/creatorProjects";
+import { commaList, creatorServiceOptions, parseCommaList } from "@/lib/creators/services";
 
 const closedProjectStatuses = new Set(["expired", "cancelled", "completed", "disputed"]);
 
@@ -43,6 +44,7 @@ function canRespondToOpportunity(opportunity: CreatorOpportunity) {
 }
 
 function getOpportunityDisplayStatus(opportunity: CreatorOpportunity) {
+    if (opportunity.project_status === "cancelled") return "Cancelled";
     if (opportunity.project_status === "expired" || opportunity.invite_status === "inactive") return "Expired/Inactive";
     if (opportunity.invite_status === "interested") return "Interested submitted";
     if (opportunity.invite_status === "declined") return "Declined";
@@ -123,16 +125,54 @@ export default function CreatorDashboard() {
 
     // Data fetcher for profile
     const fetchProfileData = async (uid: string) => {
-        const { data, error } = await supabase.from('creators').select('bio, location, day_rate, portfolio_url, verified').eq('id', uid).single();
+        const { data, error } = await supabase
+            .from('creators')
+            .select('bio, location, city, state, phone, whatsapp_phone, role, day_rate, portfolio_url, verified, equipment, tags, capacity_per_day, service_cities, service_radius_km, travel_enabled, available_for_booking, budget_flexibility, whatsapp_opt_in')
+            .eq('id', uid)
+            .single();
         if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "Row not found"
-        return data || { bio: "", location: "", day_rate: 0, portfolio_url: "", verified: false };
+        return data || {
+            bio: "",
+            location: "",
+            city: "",
+            state: "",
+            phone: "",
+            whatsapp_phone: "",
+            role: "",
+            day_rate: 0,
+            portfolio_url: "",
+            verified: false,
+            equipment: [],
+            tags: [],
+            capacity_per_day: null,
+            service_cities: [],
+            service_radius_km: 0,
+            travel_enabled: false,
+            available_for_booking: true,
+            budget_flexibility: false,
+            whatsapp_opt_in: true,
+        };
     };
 
     // Editor Profile State
     const [bio, setBio] = useState("");
     const [location, setLocation] = useState("");
+    const [city, setCity] = useState("");
+    const [stateName, setStateName] = useState("");
+    const [phone, setPhone] = useState("");
+    const [whatsappPhone, setWhatsappPhone] = useState("");
+    const [role, setRole] = useState("");
     const [dayRate, setDayRate] = useState<number | string>(0);
     const [portfolioUrl, setPortfolioUrl] = useState("");
+    const [equipmentList, setEquipmentList] = useState("");
+    const [tagsList, setTagsList] = useState("");
+    const [capacityPerDay, setCapacityPerDay] = useState<number | string>("");
+    const [serviceCities, setServiceCities] = useState("");
+    const [serviceRadiusKm, setServiceRadiusKm] = useState<number | string>(0);
+    const [travelEnabled, setTravelEnabled] = useState(false);
+    const [availableForBooking, setAvailableForBooking] = useState(true);
+    const [budgetFlexibility, setBudgetFlexibility] = useState(false);
+    const [whatsappOptIn, setWhatsappOptIn] = useState(true);
     const [portfolioItems, setPortfolioItems] = useState<{id: string, url: string}[]>([]);
 
     // SWR Hooks
@@ -151,9 +191,23 @@ export default function CreatorDashboard() {
         ([, uid]) => fetchProfileData(uid as string),
         {
             onSuccess: (data) => {
-                setBio(data.bio);
-                setLocation(data.location);
-                setDayRate(data.day_rate);
+                setBio(data.bio || "");
+                setLocation(data.location || "");
+                setCity(data.city || "");
+                setStateName(data.state || "");
+                setPhone(data.phone || "");
+                setWhatsappPhone(data.whatsapp_phone || "");
+                setRole(data.role || "");
+                setDayRate(data.day_rate || 0);
+                setEquipmentList(commaList(data.equipment));
+                setTagsList(commaList(data.tags));
+                setCapacityPerDay(data.capacity_per_day || "");
+                setServiceCities(commaList(data.service_cities));
+                setServiceRadiusKm(data.service_radius_km || 0);
+                setTravelEnabled(Boolean(data.travel_enabled));
+                setAvailableForBooking(data.available_for_booking !== false);
+                setBudgetFlexibility(Boolean(data.budget_flexibility));
+                setWhatsappOptIn(data.whatsapp_opt_in !== false);
                 let parsedLink = data.portfolio_url || "";
                 let parsedItems = [];
                 try {
@@ -176,6 +230,17 @@ export default function CreatorDashboard() {
                 setUserEmail(user.email ?? "User");
                 setUserId(user.id);
                 setCreatorType(user.user_metadata?.creator_type || null);
+                setRole((current) => current || user.user_metadata?.role || "");
+                setPhone((current) => current || user.user_metadata?.phone || "");
+                setWhatsappPhone((current) => current || user.user_metadata?.whatsapp_phone || "");
+                setCity((current) => current || user.user_metadata?.city || "");
+                setStateName((current) => current || user.user_metadata?.state || "");
+                setDayRate((current) => current || user.user_metadata?.day_rate || 0);
+                setPortfolioUrl((current) => current || user.user_metadata?.portfolio_url || "");
+                setTravelEnabled(Boolean(user.user_metadata?.travel_enabled));
+                setAvailableForBooking(user.user_metadata?.available_for_booking !== false);
+                setBudgetFlexibility(Boolean(user.user_metadata?.budget_flexibility));
+                setWhatsappOptIn(user.user_metadata?.whatsapp_opt_in !== false);
             } else {
                 setUserEmail("Unknown User");
                 router.push("/login");
@@ -226,6 +291,23 @@ export default function CreatorDashboard() {
         if (!userId) return;
 
         // Mandatory field validation based on creator_type
+        const cleanPhone = phone.replace(/[^\d+]/g, "");
+        if (!role) {
+            toast.error("Primary service is required.");
+            return;
+        }
+        if (!city.trim()) {
+            toast.error("City is required.");
+            return;
+        }
+        if (cleanPhone.length < 10) {
+            toast.error("A valid phone number is required.");
+            return;
+        }
+        if (!dayRate || Number(dayRate) <= 0) {
+            toast.error("Base day rate is required for matching.");
+            return;
+        }
         if (creatorType === 'studio_owner') {
             if (!location.trim()) {
                 toast.error("Location / Address is required for Studio profiles.");
@@ -247,13 +329,33 @@ export default function CreatorDashboard() {
             const { data: existing } = await supabase.from('creators').select('id').eq('id', userId).single();
 
             const numDayRate = typeof dayRate === 'string' ? parseInt(dayRate) || 0 : dayRate;
+            const numCapacity = typeof capacityPerDay === 'string' ? parseInt(capacityPerDay) || null : capacityPerDay || null;
+            const numRadius = typeof serviceRadiusKm === 'string' ? parseInt(serviceRadiusKm) || 0 : serviceRadiusKm || 0;
+            const profilePayload = {
+                role,
+                bio,
+                location: location || city,
+                city,
+                state: stateName || null,
+                phone,
+                whatsapp_phone: whatsappPhone || (whatsappOptIn ? phone : null),
+                day_rate: numDayRate,
+                portfolio_url: JSON.stringify({ link: portfolioUrl, items: portfolioItems }),
+                equipment: parseCommaList(equipmentList),
+                tags: parseCommaList(tagsList),
+                capacity_per_day: numCapacity,
+                service_cities: parseCommaList(serviceCities),
+                service_radius_km: numRadius,
+                travel_enabled: travelEnabled,
+                available_for_booking: availableForBooking,
+                budget_flexibility: budgetFlexibility,
+                whatsapp_opt_in: whatsappOptIn,
+                creator_type: creatorType,
+            };
 
             if (existing) {
                 const { error } = await supabase.from('creators').update({
-                    bio,
-                    location,
-                    day_rate: numDayRate,
-                    portfolio_url: JSON.stringify({ link: portfolioUrl, items: portfolioItems })
+                    ...profilePayload,
                 }).eq('id', userId);
 
                 if (error) reject(error);
@@ -263,11 +365,7 @@ export default function CreatorDashboard() {
                 const { error } = await supabase.from('creators').insert({
                     id: userId,
                     slug: generatedSlug,
-                    role: "Creator", // Default fallback
-                    bio,
-                    location: location || "Remote",
-                    day_rate: numDayRate,
-                    portfolio_url: JSON.stringify({ link: portfolioUrl, items: portfolioItems })
+                    ...profilePayload,
                 });
 
                 if (error) reject(error);
@@ -281,6 +379,19 @@ export default function CreatorDashboard() {
             error: 'Failed to save profile'
         });
     }
+
+    const missingProfileFields = [
+        !city.trim() ? "City" : null,
+        !role ? "Primary service" : null,
+        !dayRate || Number(dayRate) <= 0 ? "Day rate" : null,
+        !portfolioUrl.trim() ? "Portfolio URL" : null,
+        !phone.trim() && !whatsappPhone.trim() ? "Phone/WhatsApp" : null,
+        !availableForBooking ? "Available for booking" : null,
+        !travelEnabled && parseCommaList(serviceCities).length === 0 ? "Service cities or travel enabled" : null,
+    ].filter((item): item is string => Boolean(item));
+
+    const profileCompletionTotal = 7;
+    const profileCompletionPercent = Math.round(((profileCompletionTotal - missingProfileFields.length) / profileCompletionTotal) * 100);
 
     const renderSidebarContent = () => (
         <>
@@ -619,6 +730,61 @@ export default function CreatorDashboard() {
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     <div>
                                                         <label className="block text-sm font-bold text-stone-700 mb-1">
+                                                            {creatorType === 'studio_owner' ? 'Studio Services' : 'Primary Service'} <span className="text-rose-500 ml-0.5">*</span>
+                                                        </label>
+                                                        <select
+                                                            value={role}
+                                                            onChange={(e) => setRole(e.target.value)}
+                                                            className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors"
+                                                        >
+                                                            <option value="">Select service</option>
+                                                            {creatorServiceOptions.map((option) => (
+                                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-bold text-stone-700 mb-1">City <span className="text-rose-500 ml-0.5">*</span></label>
+                                                        <input
+                                                            type="text"
+                                                            value={city}
+                                                            onChange={(e) => setCity(e.target.value)}
+                                                            className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400"
+                                                            placeholder="e.g. Bilaspur"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-bold text-stone-700 mb-1">State</label>
+                                                        <input
+                                                            type="text"
+                                                            value={stateName}
+                                                            onChange={(e) => setStateName(e.target.value)}
+                                                            className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400"
+                                                            placeholder="e.g. Chhattisgarh"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-bold text-stone-700 mb-1">Phone <span className="text-rose-500 ml-0.5">*</span></label>
+                                                        <input
+                                                            type="tel"
+                                                            value={phone}
+                                                            onChange={(e) => setPhone(e.target.value)}
+                                                            className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400"
+                                                            placeholder="10 digit mobile number"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-bold text-stone-700 mb-1">WhatsApp Number</label>
+                                                        <input
+                                                            type="tel"
+                                                            value={whatsappPhone}
+                                                            onChange={(e) => setWhatsappPhone(e.target.value)}
+                                                            className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400"
+                                                            placeholder="Leave blank to use phone"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-bold text-stone-700 mb-1">
                                                             Location {creatorType === 'studio_owner' && <span className="text-rose-500 ml-0.5">*</span>}
                                                         </label>
                                                         <input
@@ -659,6 +825,44 @@ export default function CreatorDashboard() {
                                                 <p className="text-xs text-stone-400 mt-1">Required. Add your primary portfolio or social media link.</p>
                                             )}
                                         </div>
+
+                                        <section className="bg-white p-6 rounded-3xl border border-stone-100 shadow-sm space-y-6">
+                                            <div>
+                                                <h3 className="text-lg font-bold text-stone-900 flex items-center gap-2"><Search className="w-5 h-5 text-stone-400" /> Matching & Availability</h3>
+                                                <p className="text-sm text-stone-500 mt-1">
+                                                    {creatorType === "studio_owner"
+                                                        ? "Studios should add service cities, equipment, and capacity so clients can find them for larger shoots."
+                                                        : "Freelancers should add service city coverage and skills to receive relevant bookings."}
+                                                </p>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <ProfileInput label={creatorType === "studio_owner" ? "Capacity per day" : "Booking capacity per day"}>
+                                                    <input type="number" value={capacityPerDay} onChange={(e) => setCapacityPerDay(parseInt(e.target.value) || "")} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400" placeholder="e.g. 2" />
+                                                </ProfileInput>
+                                                <ProfileInput label="Service radius km">
+                                                    <input type="number" value={serviceRadiusKm} onChange={(e) => setServiceRadiusKm(parseInt(e.target.value) || 0)} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400" placeholder="0" />
+                                                </ProfileInput>
+                                                <ProfileInput label="Service cities">
+                                                    <input type="text" value={serviceCities} onChange={(e) => setServiceCities(e.target.value)} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400" placeholder="Bilaspur, Raipur, Durg" />
+                                                </ProfileInput>
+                                                <ProfileInput label="Tags / skills">
+                                                    <input type="text" value={tagsList} onChange={(e) => setTagsList(e.target.value)} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400" placeholder="wedding, portrait, editing" />
+                                                </ProfileInput>
+                                                <div className="md:col-span-2">
+                                                    <ProfileInput label="Equipment list">
+                                                        <input type="text" value={equipmentList} onChange={(e) => setEquipmentList(e.target.value)} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400" placeholder="Sony A7IV, lights, drone" />
+                                                    </ProfileInput>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid sm:grid-cols-2 gap-3">
+                                                <ProfileToggle label="Travel enabled" checked={travelEnabled} onChange={setTravelEnabled} />
+                                                <ProfileToggle label="Available for booking" checked={availableForBooking} onChange={setAvailableForBooking} />
+                                                <ProfileToggle label="Budget flexibility" checked={budgetFlexibility} onChange={setBudgetFlexibility} />
+                                                <ProfileToggle label="WhatsApp opt-in" checked={whatsappOptIn} onChange={setWhatsappOptIn} />
+                                            </div>
+                                        </section>
 
                                         {/* Services & Rates */}
                                         <section className="bg-white p-6 rounded-3xl border border-stone-100 shadow-sm space-y-6">
@@ -723,14 +927,26 @@ export default function CreatorDashboard() {
                                     {/* Sidebar Tips */}
                                     <div className="space-y-6">
                                         <div className="bg-orange-50 p-6 rounded-3xl border border-orange-100">
-                                            <h4 className="font-bold text-orange-900 mb-2">Profile Optimization</h4>
-                                            <p className="text-sm text-orange-800 leading-relaxed mb-4">
-                                                Creators with clear, transparent pricing packages receive 3x more bookings. Make sure to define what is included (and excluded) clearly.
-                                            </p>
+                                            <h4 className="font-bold text-orange-900 mb-2">Profile Completeness</h4>
+                                            <p className="text-sm text-orange-800 leading-relaxed mb-4">Complete your profile to receive better booking invites.</p>
                                             <div className="h-1.5 w-full bg-orange-200 rounded-full overflow-hidden">
-                                                <div className="h-full bg-orange-500 w-[85%] rounded-full"></div>
+                                                <div className="h-full bg-orange-500 rounded-full" style={{ width: `${profileCompletionPercent}%` }}></div>
                                             </div>
-                                            <p className="text-xs text-orange-700 mt-2 font-medium">Profile completeness: 85%</p>
+                                            <p className="text-xs text-orange-700 mt-2 font-medium">Profile completeness: {profileCompletionPercent}%</p>
+                                            {missingProfileFields.length > 0 && (
+                                                <div className="mt-4 text-xs text-orange-800">
+                                                    <div className="font-bold mb-1">Missing:</div>
+                                                    <ul className="list-disc pl-4 space-y-1">
+                                                        {missingProfileFields.map((field) => <li key={field}>{field}</li>)}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            {profile?.verified === false && (
+                                                <p className="text-xs font-semibold text-stone-700 bg-white/70 rounded-xl p-3 mt-4">Your profile is under review. You will receive booking opportunities after verification.</p>
+                                            )}
+                                            {profile?.verified && !availableForBooking && (
+                                                <p className="text-xs font-semibold text-rose-700 bg-white/70 rounded-xl p-3 mt-4">You are currently unavailable for new booking invites.</p>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -889,7 +1105,7 @@ function OpportunitySection({
                                         </>
                                     ) : (
                                         <div className="flex-1 py-2.5 bg-stone-50 text-stone-600 font-bold rounded-xl text-sm text-center">
-                                            {opportunity.project_status === "expired" || opportunity.invite_status === "inactive" ? "Expired/Inactive" : opportunity.invite_status === "interested" ? "Interested submitted" : opportunity.invite_status === "declined" ? "Declined" : "Responses closed"}
+                                            {opportunity.project_status === "cancelled" ? "Cancelled" : opportunity.project_status === "expired" || opportunity.invite_status === "inactive" ? "Expired/Inactive" : opportunity.invite_status === "interested" ? "Interested submitted" : opportunity.invite_status === "declined" ? "Declined" : "Responses closed"}
                                         </div>
                                     )}
                                 </div>
@@ -911,6 +1127,31 @@ function OpportunityMeta({ icon, label, value }: { icon: React.ReactNode; label:
                 <div className="font-bold text-stone-900 break-words">{value}</div>
             </div>
         </div>
+    );
+}
+
+function ProfileInput({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+    return (
+        <div>
+            <label className="block text-sm font-bold text-stone-700 mb-1">
+                {label} {required && <span className="text-rose-500 ml-0.5">*</span>}
+            </label>
+            {children}
+        </div>
+    );
+}
+
+function ProfileToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+    return (
+        <label className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-bold text-stone-700">
+            <span>{label}</span>
+            <input
+                type="checkbox"
+                checked={checked}
+                onChange={(event) => onChange(event.target.checked)}
+                className="h-4 w-4 rounded border-stone-300 text-rose-600 focus:ring-rose-500"
+            />
+        </label>
     );
 }
 
