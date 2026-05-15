@@ -3,6 +3,7 @@
 import { verifyCreator } from "@/app/actions/admin";
 import { CheckCircle, XCircle } from "lucide-react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 type UserData = {
@@ -22,12 +23,18 @@ type UserData = {
 };
 
 export const UsersTable = ({ users }: { users: UserData[] }) => {
+    const router = useRouter();
+    const [tableUsers, setTableUsers] = useState(users);
     const [loadingId, setLoadingId] = useState<string | null>(null);
 
     const handleVerifyToggle = async (userId: string, currentStatus: boolean) => {
         setLoadingId(userId);
         try {
             await verifyCreator(userId, !currentStatus);
+            setTableUsers((currentUsers) => currentUsers.map((user) => (
+                user.id === userId ? { ...user, creator_verified: !currentStatus } : user
+            )));
+            router.refresh();
             toast.success(`Creator ${!currentStatus ? 'verified' : 'unverified'} successfully`);
         } catch (error: unknown) {
             toast.error(error instanceof Error ? error.message : "Failed to update status");
@@ -50,7 +57,7 @@ export const UsersTable = ({ users }: { users: UserData[] }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
-                        {users.map((user) => (
+                        {tableUsers.map((user) => (
                             <tr key={user.id} className="hover:bg-stone-50/50 transition-colors">
                                 <td className="px-6 py-4">
                                     <div className="font-medium text-stone-900">{user.full_name || "Unknown"}</div>
@@ -118,7 +125,7 @@ export const UsersTable = ({ users }: { users: UserData[] }) => {
                                 </td>
                             </tr>
                         ))}
-                        {users.length === 0 && (
+                        {tableUsers.length === 0 && (
                             <tr>
                                 <td colSpan={5} className="px-6 py-8 text-center text-stone-500">
                                     No users found.
