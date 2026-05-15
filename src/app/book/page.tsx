@@ -7,6 +7,7 @@ import {
     CalendarDays, Package, FileText, Brain, Upload
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { createBooking, type CreateBookingInput } from "@/app/actions/bookings";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -28,7 +29,8 @@ export default function BookingFlow() {
     const [mode, setMode] = useState<"selection" | "quick" | "builder" | "equipment" | "script">("selection");
     const [step, setStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [matchedCreators, setMatchedCreators] = useState<MatchedCreator[]>([]);
+    const [bookingMatchCount, setBookingMatchCount] = useState(0);
+    const matchedCreators: MatchedCreator[] = [];
     const router = useRouter();
     const supabase = createClient();
 
@@ -135,6 +137,12 @@ export default function BookingFlow() {
         "Product Shoot", "Music Video", "Documentary", "Commercial Ad"
     ];
 
+    const getQuickBookingType = (): CreateBookingInput["bookingType"] => {
+        if (photoCount > 0 && videoCount > 0) return "production_crew";
+        if (videoCount > 0) return "videographer";
+        return "photographer";
+    };
+
 
     // ====== SCRIPT ANALYSIS STATE ======
     const [scriptText, setScriptText] = useState("");
@@ -195,15 +203,18 @@ export default function BookingFlow() {
         setIsSubmitting(true);
         const description = `Custom Crew Build | Duration: ${days} days | Roles: ${crew.map(c => `${c.count}x ${c.name}`).join(', ')}`;
         try {
-            const { error } = await supabase.from('projects').insert({
-                client_id: clientId,
+            const result = await createBooking({
+                bookingType: "production_crew",
                 title: "Custom Crew Request",
                 description,
+                requirementSummary: description,
                 budget: grandTotal,
-                status: "pending"
+                estimatedDays: days,
             });
-            if (error) throw error;
-            toast.success("Crew request submitted successfully!");
+            if (!result.success) {
+                throw new Error(result.message);
+            }
+            toast.success(`${result.message} ${result.match_count || 0} creator(s) matched.`);
             router.push('/dashboard');
         } catch (error: unknown) {
             toast.error((error as Error).message || "Failed to submit request.");
@@ -220,18 +231,21 @@ export default function BookingFlow() {
         setIsSubmitting(true);
         const description = `Equipment Booking | Duration: ${equipDays} days | Items: ${equipment.map(e => `${e.count}x ${e.name}`).join(', ')}`;
         try {
-            const { error } = await supabase.from('projects').insert({
-                client_id: clientId,
+            const result = await createBooking({
+                bookingType: "equipment",
                 title: "Equipment Booking Request",
                 description,
+                requirementSummary: description,
                 budget: equipGrandTotal,
-                status: "pending"
+                estimatedDays: equipDays,
             });
-            if (error) throw error;
-            toast.success("Equipment request submitted successfully!");
+            if (!result.success) {
+                throw new Error(result.message);
+            }
+            toast.success(`${result.message} ${result.match_count || 0} creator(s) matched.`);
             router.push('/dashboard');
         } catch (error: unknown) {
-            toast.error((error as Error).message || "Failed to submit request.");
+            toast.error((error as Error).message || "Failed to submit equipment request.");
             setIsSubmitting(false);
         }
     };
@@ -244,25 +258,22 @@ export default function BookingFlow() {
         }
         setIsSubmitting(true);
         const effectiveBudget = isFixedBudget ? (parseInt(fixedBudgetAmount) || budgetValue) : budgetValue;
-        const description = `Quick Booking | Event: ${selectedEventType} | Photographers: ${photoCount}, Videographers: ${videoCount} | Date: ${bookingDate}`;
+        const description = `Quick Booking | Event: ${selectedEventType} | Photographers: ${photoCount}, Videographers: ${videoCount} | Date: ${bookingDate} | Location: ${bookingLocation}`;
         try {
-            const { error } = await supabase.from('projects').insert({
-                client_id: clientId,
+            const result = await createBooking({
+                bookingType: getQuickBookingType(),
+                bookingLocation,
+                eventDate: bookingDate,
                 title: "Quick Booking Request",
                 description,
+                requirementSummary: description,
                 budget: effectiveBudget,
-                status: "pending"
+                estimatedDays: 1,
             });
-            if (error) throw error;
-
-            // Fetch matched creators
-            const { data: matches } = await supabase
-                .from('creators')
-                .select('*, users ( full_name )')
-                .eq('verified', true)
-                .limit(3);
-            if (matches) setMatchedCreators(matches);
-
+            if (!result.success) {
+                throw new Error(result.message);
+            }
+            setBookingMatchCount(result.match_count || 0);
             setStep(5); // Success step
         } catch (error: unknown) {
             toast.error((error as Error).message || "Failed to process quick booking.");
@@ -628,8 +639,13 @@ export default function BookingFlow() {
                                         </div>
                                         <h2 className="text-3xl font-black text-stone-900 mb-2 font-display">Request Submitted!</h2>
                                         <p className="text-stone-500 max-w-lg mx-auto">
-                                            Your requirement has been posted. Here are your top AI-matched creators based on your event and budget:
+                                            Booking created successfully. We are notifying matched verified creators.
                                         </p>
+                                    </div>
+
+                                    <div className="bg-stone-50 border border-stone-200 rounded-2xl p-6 text-center">
+                                        <div className="text-3xl font-black text-orange-600 font-display">{bookingMatchCount}</div>
+                                        <p className="text-sm text-stone-500 font-medium mt-1">verified creator(s) matched for notification</p>
                                     </div>
 
                                     {matchedCreators.length > 0 && (

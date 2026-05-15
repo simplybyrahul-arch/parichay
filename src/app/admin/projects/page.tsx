@@ -1,5 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
-import { Clock, CheckCircle, FileText, Ban, PlayCircle } from "lucide-react";
+import Link from "next/link";
+import { Clock, CheckCircle, FileText, Ban, PlayCircle, AlertTriangle, UserCog } from "lucide-react";
+import { activeOpportunityStatuses } from "@/lib/projects/status";
 
 type RelatedName = {
     full_name: string | null;
@@ -10,23 +12,88 @@ type ProjectRow = {
     title: string;
     budget: number;
     status: string | null;
+    payment_status: string | null;
     created_at: string;
+    event_date: string | null;
+    expires_at: string | null;
+    parichay_assigned: boolean | null;
+    selected_creator_id: string | null;
     client: RelatedName;
-    creator: RelatedName;
+    selected_creator: ({ role: string | null; users: RelatedName | RelatedName[] | null } | { role: string | null; users: RelatedName | RelatedName[] | null }[]) | null;
 };
+
+type InviteRow = {
+    project_id: string;
+    status: string;
+};
+
+type DisputeRow = {
+    project_id: string;
+    status: string;
+};
+
+function isUrgentParichay(project: ProjectRow) {
+    if (project.parichay_assigned || !["confirmed", "in_progress"].includes(project.status || "")) return false;
+    if (!project.event_date) return false;
+    const diff = new Date(project.event_date).getTime() - Date.now();
+    return diff >= 0 && diff <= 48 * 60 * 60 * 1000;
+}
+
+function needsParichay(project: ProjectRow) {
+    return !project.parichay_assigned && ["confirmed", "in_progress"].includes(project.status || "");
+}
+
+function isExpiringSoon(project: ProjectRow) {
+    if (!project.expires_at || project.selected_creator_id) return false;
+    if (!activeOpportunityStatuses.includes(project.status as (typeof activeOpportunityStatuses)[number])) return false;
+    const diff = new Date(project.expires_at).getTime() - Date.now();
+    return diff > 0 && diff <= 12 * 60 * 60 * 1000;
+}
+
+function getSelectedCreatorName(project: ProjectRow) {
+    const creator = Array.isArray(project.selected_creator) ? project.selected_creator[0] : project.selected_creator;
+    const user = Array.isArray(creator?.users) ? creator?.users[0] : creator?.users;
+    return user?.full_name || creator?.role || null;
+}
+
+function incrementCount(map: Map<string, number>, projectId: string) {
+    map.set(projectId, (map.get(projectId) || 0) + 1);
+}
 
 export default async function AdminProjectsPage() {
     const supabase = await createClient();
 
-    // Fetch projects
-    const { data: projects } = await supabase
-        .from("projects")
-        .select(`
-            *,
-            client:client_id(full_name),
-            creator:creator_id(full_name)
-        `)
-        .order("created_at", { ascending: false });
+    const [{ data: projects }, { data: invites }, { data: disputes }] = await Promise.all([
+        supabase
+            .from("projects")
+            .select(`
+                *,
+                client:client_id(full_name),
+                selected_creator:selected_creator_id(role, users(full_name))
+            `)
+            .order("created_at", { ascending: false }),
+        supabase
+            .from("project_invites")
+            .select("project_id, status"),
+        supabase
+            .from("project_disputes")
+            .select("project_id, status"),
+    ]);
+
+    const inviteCountByProject = new Map<string, number>();
+    const interestedCountByProject = new Map<string, number>();
+    ((invites || []) as InviteRow[]).forEach((invite) => {
+        incrementCount(inviteCountByProject, invite.project_id);
+        if (["interested", "shortlisted", "selected"].includes(invite.status)) {
+            incrementCount(interestedCountByProject, invite.project_id);
+        }
+    });
+
+    const activeDisputeByProject = new Set(
+        ((disputes || []) as DisputeRow[])
+            .filter((dispute) => ["open", "under_review"].includes(dispute.status))
+            .map((dispute) => dispute.project_id)
+    );
 
     const getStatusIcon = (status: string) => {
         switch (status) {
@@ -67,21 +134,27 @@ export default async function AdminProjectsPage() {
                                 <th className="px-6 py-4 font-semibold">Assigned Creator</th>
                                 <th className="px-6 py-4 font-semibold">Budget</th>
                                 <th className="px-6 py-4 font-semibold">Status</th>
+                                <th className="px-6 py-4 font-semibold">Payment</th>
+                                <th className="px-6 py-4 font-semibold">Invites</th>
+                                <th className="px-6 py-4 font-semibold">Parichay</th>
+                                <th className="px-6 py-4 font-semibold">Risks</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-stone-100">
                             {(projects as ProjectRow[] | null)?.map((project) => (
                                 <tr key={project.id} className="hover:bg-stone-50/50 transition-colors">
                                     <td className="px-6 py-4">
-                                        <div className="font-medium text-stone-900">{project.title}</div>
+                                        <Link href={`/admin/projects/${project.id}`} className="font-medium text-stone-900 hover:text-purple-700">
+                                            {project.title}
+                                        </Link>
                                         <div className="text-xs text-stone-500 mt-0.5">{new Date(project.created_at).toLocaleDateString()}</div>
                                     </td>
                                     <td className="px-6 py-4">
                                         {project.client?.full_name || 'Unknown'}
                                     </td>
                                     <td className="px-6 py-4">
-                                        {project.creator?.full_name ? (
-                                            <span className="font-medium text-stone-900">{project.creator?.full_name}</span>
+                                        {getSelectedCreatorName(project) ? (
+                                            <span className="font-medium text-stone-900">{getSelectedCreatorName(project)}</span>
                                         ) : (
                                             <span className="text-stone-400 italic">Unassigned</span>
                                         )}
@@ -95,11 +168,54 @@ export default async function AdminProjectsPage() {
                                             {project.status?.replace('_', ' ')}
                                         </span>
                                     </td>
+                                    <td className="px-6 py-4">
+                                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium border bg-stone-50 text-stone-700 border-stone-200 capitalize">
+                                            {(project.payment_status || "not_required").replace(/_/g, " ")}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="font-semibold text-stone-900">{inviteCountByProject.get(project.id) || 0} invites</div>
+                                        <div className="text-xs text-stone-500">{interestedCountByProject.get(project.id) || 0} interested</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        {project.parichay_assigned ? (
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                                                <CheckCircle className="w-3.5 h-3.5" /> Assigned
+                                            </span>
+                                        ) : isUrgentParichay(project) ? (
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                                                <AlertTriangle className="w-3.5 h-3.5" /> Urgent
+                                            </span>
+                                        ) : needsParichay(project) ? (
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200">
+                                                <UserCog className="w-3.5 h-3.5" /> Needed
+                                            </span>
+                                        ) : (
+                                            <span className="text-stone-400 italic">Not required</span>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-wrap gap-2">
+                                            {activeDisputeByProject.has(project.id) && (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                                                    <AlertTriangle className="w-3.5 h-3.5" /> Dispute
+                                                </span>
+                                            )}
+                                            {isExpiringSoon(project) && (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200">
+                                                    <Clock className="w-3.5 h-3.5" /> Expiring
+                                                </span>
+                                            )}
+                                            {!activeDisputeByProject.has(project.id) && !isExpiringSoon(project) && (
+                                                <span className="text-stone-400 italic">Clear</span>
+                                            )}
+                                        </div>
+                                    </td>
                                 </tr>
                             ))}
                             {!projects?.length && (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-8 text-center text-stone-500">
+                                    <td colSpan={9} className="px-6 py-8 text-center text-stone-500">
                                         No projects found.
                                     </td>
                                 </tr>

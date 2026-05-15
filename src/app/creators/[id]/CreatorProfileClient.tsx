@@ -135,7 +135,7 @@ export default function CreatorProfileClient({ creator }: { creator: CreatorProf
                             </Link>
                             <div className="mt-4 flex items-center justify-center gap-2 text-stone-400 text-xs font-medium">
                                 <Shield className="w-4 h-4" />
-                                Payments protected by ShotcutCrew Escrow
+                                Payments verified through ShotcutCrew
                             </div>
                         </motion.div>
 

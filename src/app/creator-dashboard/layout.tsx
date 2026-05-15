@@ -2,7 +2,7 @@ import { Metadata } from "next";
 
 export const metadata: Metadata = {
     title: "Creator Dashboard",
-    description: "Manage your creative jobs, escrow status, and discover new booking requests.",
+    description: "Manage your creative jobs, payment status, and discover new booking requests.",
     robots: {
         index: false,
         follow: false,

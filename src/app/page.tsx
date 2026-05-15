@@ -27,10 +27,11 @@ export default function Home() {
     name: "Shotcutcrew",
     url: "https://shotcutcrew.com",
     logo: "https://shotcutcrew.com/logo.jpg",
-    description: "AI-powered planning and blockchain-secured payments built in from the start.",
+    description: "AI-powered planning, verified creators, coordinator support, and transparent payment tracking.",
     sameAs: [
-      "https://twitter.com/shotcutcrew",
-      "https://instagram.com/shotcutcrew"
+      "https://x.com/shotcutcrew",
+      "https://www.instagram.com/shotcutcrew",
+      "https://www.linkedin.com/company/shotcutcrew"
     ]
   };
 

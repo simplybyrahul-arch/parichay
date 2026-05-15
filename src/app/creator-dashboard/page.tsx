@@ -19,7 +19,8 @@ import {
     Plus,
     Image as ImageIcon,
     LayoutTemplate,
-    LogOut
+    LogOut,
+    MapPin
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -27,6 +28,26 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { logout } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
+import { listCreatorOpportunities, respondToOpportunity, type CreatorOpportunity } from "../actions/opportunities";
+import { startAssignedProject } from "../actions/creatorProjects";
+
+const closedProjectStatuses = new Set(["expired", "cancelled", "completed", "disputed"]);
+
+function formatCurrency(value: number | null) {
+    if (!value) return "Budget not specified";
+    return `Rs ${value.toLocaleString("en-IN")}`;
+}
+
+function canRespondToOpportunity(opportunity: CreatorOpportunity) {
+    return !closedProjectStatuses.has(opportunity.project_status) && ["sent", "viewed"].includes(opportunity.invite_status);
+}
+
+function getOpportunityDisplayStatus(opportunity: CreatorOpportunity) {
+    if (opportunity.project_status === "expired" || opportunity.invite_status === "inactive") return "Expired/Inactive";
+    if (opportunity.invite_status === "interested") return "Interested submitted";
+    if (opportunity.invite_status === "declined") return "Declined";
+    return opportunity.invite_status;
+}
 
 export default function CreatorDashboard() {
     const [activeTab, setActiveTab] = useState("overview");
@@ -95,6 +116,11 @@ export default function CreatorDashboard() {
         return [];
     };
 
+    const fetchOpportunities = async () => {
+        if (!userId) return [];
+        return listCreatorOpportunities();
+    };
+
     // Data fetcher for profile
     const fetchProfileData = async (uid: string) => {
         const { data, error } = await supabase.from('creators').select('bio, location, day_rate, portfolio_url, verified').eq('id', uid).single();
@@ -113,6 +139,11 @@ export default function CreatorDashboard() {
     const { data: requests = [], isValidating: loading, mutate: mutateRequests } = useSWR(
         userId ? ['creator-requests', userId] : null,
         fetchRequests
+    );
+
+    const { data: opportunities = [], isValidating: opportunitiesLoading, mutate: mutateOpportunities } = useSWR(
+        userId ? ['creator-opportunities', userId] : null,
+        fetchOpportunities
     );
 
     const { data: profile } = useSWR(
@@ -160,15 +191,9 @@ export default function CreatorDashboard() {
     const handleAcceptRequest = async (id: string) => {
         if (!userId) return;
 
-        const updatePromise = new Promise((resolve, reject) => {
-            supabase
-                .from('projects')
-                .update({ status: 'in_progress', creator_id: userId })
-                .eq('id', id)
-                .then(({ error }) => {
-                    if (error) reject(error);
-                    else resolve(true);
-                });
+        const updatePromise = startAssignedProject(id).then((result) => {
+            if (!result.success) throw new Error(result.message);
+            return true;
         });
 
         toast.promise(updatePromise, {
@@ -177,9 +202,25 @@ export default function CreatorDashboard() {
                 mutateRequests(); // Refresh list via SWR
                 return 'Request accepted successfully!';
             },
-            error: 'Failed to accept request'
+            error: (error) => error instanceof Error ? error.message : 'Failed to accept request'
         });
     }
+
+    const handleOpportunityResponse = (projectId: string, status: "interested" | "declined") => {
+        const responsePromise = respondToOpportunity(projectId, status);
+
+        toast.promise(responsePromise, {
+            loading: status === "interested" ? "Submitting interest..." : "Declining opportunity...",
+            success: (result) => {
+                if (!result.success) {
+                    throw new Error(result.message);
+                }
+                mutateOpportunities();
+                return result.message;
+            },
+            error: (error) => error instanceof Error ? error.message : "Could not update opportunity response.",
+        });
+    };
 
     const handleSaveProfile = async () => {
         if (!userId) return;
@@ -271,7 +312,7 @@ export default function CreatorDashboard() {
                     label="Booking Requests"
                     isActive={activeTab === "requests"}
                     onClick={() => { setActiveTab("requests"); setMobileMenuOpen(false); }}
-                    badge={requests.filter(r => r.status === 'New Request').length.toString()}
+                    badge={(requests.filter(r => r.status === 'New Request').length + opportunities.filter(canRespondToOpportunity).length).toString()}
                 />
                 <NavItem
                     icon={<MessageSquare className="w-5 h-5" />}
@@ -404,7 +445,7 @@ export default function CreatorDashboard() {
                                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                                     <div>
                                         <h1 className="text-3xl font-black text-stone-900 font-display tracking-tight mb-2">Dashboard Overview</h1>
-                                        <p className="text-stone-500">You have {requests.filter(r => r.status === 'New Request').length} new booking requests to review.</p>
+                                        <p className="text-stone-500">You have {opportunities.filter(canRespondToOpportunity).length} new booking opportunities to review.</p>
                                     </div>
                                     <div className="flex items-center gap-2 text-sm font-medium text-stone-600 bg-white px-4 py-2 rounded-xl border border-stone-200 shadow-sm">
                                         <span className="relative flex h-3 w-3">
@@ -430,6 +471,13 @@ export default function CreatorDashboard() {
                                     <StatCard title="Jobs Completed" value={requests.filter(r => r.status === 'completed').length.toString()} trend="From project statuses" icon={<CheckCircle className="w-5 h-5 text-blue-600" />} />
                                     <StatCard title="Trust Score" value={profile?.verified ? 'Verified' : 'Unverified'} trend="From creator profile" icon={<Star className="w-5 h-5 text-amber-500" />} />
                                 </div>
+
+                                <OpportunitySection
+                                    opportunities={opportunities}
+                                    loading={opportunitiesLoading}
+                                    onView={(projectId) => router.push(`/opportunities/${projectId}`)}
+                                    onRespond={handleOpportunityResponse}
+                                />
 
                                 {/* Recent Booking Requests */}
                                 <section>
@@ -690,10 +738,18 @@ export default function CreatorDashboard() {
                         )}
 
                         {activeTab === "requests" && (
-                            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
-                                <Inbox className="w-16 h-16 text-rose-200 mb-4" />
-                                <h2 className="text-2xl font-bold text-stone-900 mb-2">Booking Requests</h2>
-                                <p className="text-stone-500 max-w-md">Manage your incoming project requests, send counter-proposals, and negotiate terms with clients here.</p>
+                            <div className="space-y-8">
+                                <OpportunitySection
+                                    opportunities={opportunities}
+                                    loading={opportunitiesLoading}
+                                    onView={(projectId) => router.push(`/opportunities/${projectId}`)}
+                                    onRespond={handleOpportunityResponse}
+                                />
+                                <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
+                                    <Inbox className="w-16 h-16 text-rose-200 mb-4" />
+                                    <h2 className="text-2xl font-bold text-stone-900 mb-2">Assigned Booking Requests</h2>
+                                    <p className="text-stone-500 max-w-md">Assigned projects still appear in the existing dashboard sections. New broadcast bookings now appear above for your response.</p>
+                                </div>
                             </div>
                         )}
 
@@ -717,7 +773,7 @@ export default function CreatorDashboard() {
                             <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
                                 <Wallet className="w-16 h-16 text-rose-200 mb-4" />
                                 <h2 className="text-2xl font-bold text-stone-900 mb-2">Earnings & Payouts</h2>
-                                <p className="text-stone-500 max-w-md">Track funds stuck in Escrow, request withdrawals, and manage your tax documents and invoices natively.</p>
+                                <p className="text-stone-500 max-w-md">Track confirmed payments, payout readiness, and future settlement details once vendor payout support is enabled.</p>
                             </div>
                         )}
 
@@ -746,6 +802,127 @@ export default function CreatorDashboard() {
 }
 
 // Helper Components
+function OpportunitySection({
+    opportunities,
+    loading,
+    onView,
+    onRespond,
+}: {
+    opportunities: CreatorOpportunity[];
+    loading: boolean;
+    onView: (projectId: string) => void;
+    onRespond: (projectId: string, status: "interested" | "declined") => void;
+}) {
+    return (
+        <section>
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h2 className="text-xl font-bold text-stone-900 font-display">New Booking Opportunities</h2>
+                    <p className="text-sm text-stone-500 mt-1">Broadcast bookings matched to your verified creator profile.</p>
+                </div>
+            </div>
+
+            {loading ? (
+                <div className="text-center py-12 bg-white rounded-2xl border border-stone-100">
+                    <div className="w-8 h-8 rounded-full border-4 border-rose-200 border-t-rose-600 animate-spin mx-auto mb-4"></div>
+                    <p className="text-stone-500 font-medium">Fetching booking opportunities...</p>
+                </div>
+            ) : opportunities.length === 0 ? (
+                <div className="text-center py-16 bg-white rounded-2xl border border-stone-100 shadow-sm">
+                    <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Inbox className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-xl font-bold text-stone-900 mb-2 font-display">No new opportunities</h3>
+                    <p className="text-stone-500 max-w-sm mx-auto">When a broadcast booking matches your profile, it will appear here.</p>
+                </div>
+            ) : (
+                <div className="grid lg:grid-cols-2 gap-4">
+                    {opportunities.map((opportunity) => {
+                        const canRespond = canRespondToOpportunity(opportunity);
+                        return (
+                            <div key={opportunity.invite_id} className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm hover:shadow-md hover:border-rose-200 transition-all flex flex-col">
+                                <div className="flex justify-between items-start gap-4 mb-4">
+                                    <div className="min-w-0">
+                                        <h3 className="font-bold text-stone-900 leading-tight truncate">{opportunity.title}</h3>
+                                        <div className="text-xs font-medium text-stone-500 mt-1">
+                                            {new Date(opportunity.created_at).toLocaleDateString()} · {getOpportunityDisplayStatus(opportunity)}
+                                        </div>
+                                    </div>
+                                    <div className={`text-xs font-bold uppercase tracking-wider px-2 py-1 rounded-md ${opportunity.invite_status === "interested" ? "text-green-700 bg-green-50" : opportunity.invite_status === "declined" || opportunity.invite_status === "inactive" || opportunity.project_status === "expired" ? "text-stone-600 bg-stone-100" : "text-rose-600 bg-rose-50"}`}>
+                                        {getOpportunityDisplayStatus(opportunity)}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3 mb-6 flex-1">
+                                    <div className="flex items-start gap-3">
+                                        <Camera className="w-4 h-4 text-stone-400 mt-0.5 flex-shrink-0" />
+                                        <div className="min-w-0">
+                                            <div className="text-sm font-bold text-stone-900">{opportunity.booking_type?.replace(/_/g, " ") || "Booking"}</div>
+                                            <div className="text-xs text-stone-500 break-words line-clamp-2">{opportunity.requirement_summary || opportunity.description || "No summary provided."}</div>
+                                        </div>
+                                    </div>
+                                    <div className="grid sm:grid-cols-2 gap-3">
+                                        <OpportunityMeta icon={<MapPin className="w-4 h-4" />} label="Location" value={opportunity.booking_location || "Not specified"} />
+                                        <OpportunityMeta icon={<Calendar className="w-4 h-4" />} label="Event Date" value={opportunity.event_date ? new Date(opportunity.event_date).toLocaleDateString() : "Not specified"} />
+                                        <OpportunityMeta icon={<ClockIcon />} label="Days" value={opportunity.estimated_days ? `${opportunity.estimated_days}` : "Not specified"} />
+                                        <OpportunityMeta icon={<Wallet className="w-4 h-4" />} label="Budget" value={formatCurrency(opportunity.budget)} />
+                                    </div>
+                                    {opportunity.match_reason && (
+                                        <div className="rounded-xl bg-stone-50 border border-stone-100 p-3 text-xs text-stone-600">
+                                            <span className="font-bold text-stone-800">Match:</span> {opportunity.match_reason}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-stone-100">
+                                    <button onClick={() => onView(opportunity.project_id)} className="flex-1 py-2.5 bg-white border border-stone-200 text-stone-700 font-bold rounded-xl hover:bg-stone-50 transition-colors text-sm">
+                                        View Details
+                                    </button>
+                                    {canRespond ? (
+                                        <>
+                                            <button onClick={() => onRespond(opportunity.project_id, "declined")} className="flex-1 py-2.5 bg-stone-50 text-stone-700 font-bold rounded-xl hover:bg-stone-100 transition-colors text-sm">
+                                                Decline
+                                            </button>
+                                            <button onClick={() => onRespond(opportunity.project_id, "interested")} className="flex-1 py-2.5 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors text-sm">
+                                                Interested
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <div className="flex-1 py-2.5 bg-stone-50 text-stone-600 font-bold rounded-xl text-sm text-center">
+                                            {opportunity.project_status === "expired" || opportunity.invite_status === "inactive" ? "Expired/Inactive" : opportunity.invite_status === "interested" ? "Interested submitted" : opportunity.invite_status === "declined" ? "Declined" : "Responses closed"}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function OpportunityMeta({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+    return (
+        <div className="flex items-start gap-2 text-xs">
+            <span className="text-stone-400 mt-0.5">{icon}</span>
+            <div className="min-w-0">
+                <div className="font-semibold text-stone-500">{label}</div>
+                <div className="font-bold text-stone-900 break-words">{value}</div>
+            </div>
+        </div>
+    );
+}
+
+function ClockIcon() {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 6v6l4 2" />
+        </svg>
+    );
+}
+
 function NavItem({ icon, label, isActive, onClick, badge }: { icon: React.ReactNode, label: string, isActive: boolean, onClick: () => void, badge?: string }) {
     return (
         <button
