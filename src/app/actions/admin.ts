@@ -1,8 +1,33 @@
 "use server";
 
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { logAdminAction } from "@/utils/audit-logger";
+
+function getRequiredEnv(name: string) {
+    const value = process.env[name];
+    if (!value) throw new Error(`${name} is not configured`);
+    return value;
+}
+
+function createAdminClient() {
+    return createSupabaseAdminClient(
+        getRequiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
+        getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+        {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false,
+            },
+        }
+    );
+}
+
+function createCreatorSlug(name: string | null | undefined, id: string) {
+    const base = (name || "creator").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "creator";
+    return `${base}-${id.slice(0, 8)}`;
+}
 
 // Higher Order Function to securely wrap Admin server actions
 export async function withAdminAuth<T extends unknown[], R>(
@@ -24,15 +49,47 @@ export async function withAdminAuth<T extends unknown[], R>(
 }
 
 export const verifyCreator = await withAdminAuth(async (creatorId: string, verify: boolean) => {
-    const supabase = await createClient();
+    const admin = createAdminClient();
 
-    const { error } = await supabase
+    const { data: profile, error: profileError } = await admin
+        .from("users")
+        .select("id, full_name, account_type")
+        .eq("id", creatorId)
+        .single();
+
+    if (profileError || !profile || profile.account_type !== "creator") {
+        throw new Error("Creator user profile was not found.");
+    }
+
+    const { data: updatedCreator, error } = await admin
         .from('creators')
         .update({ verified: verify })
-        .eq('id', creatorId);
+        .eq('id', creatorId)
+        .select("id, verified")
+        .maybeSingle();
 
     if (error) {
         throw new Error(error.message);
+    }
+
+    if (!updatedCreator) {
+        const { error: insertError } = await admin
+            .from("creators")
+            .insert({
+                id: creatorId,
+                slug: createCreatorSlug(profile.full_name, creatorId),
+                role: "creator",
+                location: "Remote",
+                city: null,
+                day_rate: 0,
+                verified: verify,
+                available_for_booking: true,
+                whatsapp_opt_in: true,
+            });
+
+        if (insertError) {
+            throw new Error(insertError.message);
+        }
     }
 
     // Capture the secure Audit Log
