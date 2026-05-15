@@ -10,6 +10,7 @@ type Props = {
 };
 
 const closedProjectStatuses = new Set(["expired", "cancelled", "completed", "disputed"]);
+const assignedProjectStatuses = new Set(["confirmed", "in_progress", "delivered"]);
 
 export function OpportunityResponseForm({ opportunity }: Props) {
     const [responseNote, setResponseNote] = useState(opportunity.response_note || "");
@@ -24,6 +25,8 @@ export function OpportunityResponseForm({ opportunity }: Props) {
         ? "This booking has been cancelled and is no longer accepting responses."
         : isExpired
             ? "This booking has expired and is no longer accepting responses."
+            : inviteStatus === "selected" || assignedProjectStatuses.has(opportunity.project_status)
+                ? "You are selected for this booking. Use the timeline below for project updates."
             : inviteStatus === "interested"
                 ? "Interested submitted"
                 : inviteStatus === "declined"

@@ -10,6 +10,10 @@ type ActionResult = {
     message: string;
 };
 
+type UploadResult = ActionResult & {
+    proofUrl?: string;
+};
+
 export type ProjectQrPaymentDetails = {
     payment_id: string;
     payment_status: string;
@@ -44,6 +48,9 @@ type PaymentRow = {
 
 const qrProjectStatuses = new Set(["confirmed", "in_progress", "delivered"]);
 const verifiablePaymentStatuses = new Set(["pending", "qr_pending", "proof_uploaded"]);
+const paymentProofBucket = "payment-proofs";
+const maxProofFileSize = 5 * 1024 * 1024;
+const allowedProofFileTypes = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 
 function getRequiredEnv(name: string) {
     const value = process.env[name];
@@ -182,6 +189,22 @@ async function adminUsers(admin: ReturnType<typeof createAdminClient>) {
     return data || [];
 }
 
+async function ensurePaymentProofBucket(admin: ReturnType<typeof createAdminClient>) {
+    const { data: buckets, error: listError } = await admin.storage.listBuckets();
+    if (listError) throw new Error("Could not access payment proof storage.");
+
+    const exists = buckets?.some((bucket) => bucket.name === paymentProofBucket);
+    if (exists) return;
+
+    const { error } = await admin.storage.createBucket(paymentProofBucket, {
+        public: true,
+        fileSizeLimit: maxProofFileSize,
+        allowedMimeTypes: Array.from(allowedProofFileTypes),
+    });
+
+    if (error) throw new Error(error.message);
+}
+
 function safeQrDetails(payment: PaymentRow, payload: ReturnType<typeof createProjectUpiPaymentPayload>): ProjectQrPaymentDetails {
     return {
         payment_id: payment.id,
@@ -277,6 +300,54 @@ export async function submitQrPaymentProof(projectId: string, paymentReference: 
     revalidatePath("/admin/payments");
     revalidatePath("/admin/parichay");
     return { success: true, message: "Payment proof submitted. Waiting for coordinator/admin verification." };
+}
+
+export async function uploadQrPaymentProofFile(projectId: string, formData: FormData): Promise<UploadResult> {
+    const actor = await getActor();
+    if (!actor.userId) return { success: false, message: actor.error || "Unauthorized." };
+
+    const file = formData.get("proof");
+    if (!(file instanceof File)) {
+        return { success: false, message: "Please choose a screenshot or PDF proof file." };
+    }
+
+    if (!allowedProofFileTypes.has(file.type)) {
+        return { success: false, message: "Upload a PNG, JPG, WebP, or PDF file." };
+    }
+
+    if (file.size > maxProofFileSize) {
+        return { success: false, message: "Payment proof file must be 5 MB or smaller." };
+    }
+
+    const admin = createAdminClient();
+    const project = await getProject(admin, projectId);
+    if (!project || project.client_id !== actor.userId) return { success: false, message: "Project not found." };
+    if (!qrProjectStatuses.has(String(project.status))) {
+        return { success: false, message: "Payment proof can be uploaded only for confirmed, in-progress, or delivered projects." };
+    }
+
+    await ensurePaymentProofBucket(admin);
+
+    const extension = file.name.split(".").pop()?.toLowerCase() || "proof";
+    const safeExtension = extension.replace(/[^a-z0-9]/g, "") || "proof";
+    const path = `${project.id}/${actor.userId}-${Date.now()}.${safeExtension}`;
+    const bytes = Buffer.from(await file.arrayBuffer());
+
+    const { error } = await admin.storage
+        .from(paymentProofBucket)
+        .upload(path, bytes, {
+            contentType: file.type,
+            upsert: false,
+        });
+
+    if (error) return { success: false, message: error.message };
+
+    const { data } = admin.storage.from(paymentProofBucket).getPublicUrl(path);
+    return {
+        success: true,
+        message: "Payment screenshot uploaded.",
+        proofUrl: data.publicUrl,
+    };
 }
 
 export async function verifyQrPayment(projectId: string, paymentId: string, verificationNote?: string): Promise<ActionResult> {

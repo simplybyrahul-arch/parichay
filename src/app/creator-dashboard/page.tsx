@@ -1168,14 +1168,14 @@ function NavItem({ icon, label, isActive, onClick, badge }: { icon: React.ReactN
     return (
         <button
             onClick={onClick}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-rose-50 text-rose-600 font-bold shadow-sm ring-1 ring-rose-500/10' : 'text-stone-500 hover:bg-stone-50 hover:text-stone-900 font-medium'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left ${isActive ? 'bg-rose-50 text-rose-600 font-bold shadow-sm ring-1 ring-rose-500/10' : 'text-stone-500 hover:bg-stone-50 hover:text-stone-900 font-medium'}`}
         >
-            <div className="flex items-center gap-3">
-                <span className={isActive ? 'text-rose-500' : 'text-stone-400'}>{icon}</span>
-                {label}
+            <span className={`shrink-0 ${isActive ? 'text-rose-500' : 'text-stone-400'}`}>{icon}</span>
+            <div className="min-w-0 flex-1">
+                <span className="block truncate">{label}</span>
             </div>
             {badge && (
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-rose-600 text-white' : 'bg-stone-200 text-stone-600'}`}>
+                <span className={`shrink-0 min-w-6 h-6 inline-flex items-center justify-center rounded-full text-xs font-bold ${isActive ? 'bg-rose-600 text-white' : 'bg-stone-200 text-stone-600'}`}>
                     {badge}
                 </span>
             )}

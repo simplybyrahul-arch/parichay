@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, Calendar, MapPin, Wallet, Clock, Tag } from "lucide-react";
 import { getOpportunityDetail, markOpportunityViewed, validateWhatsAppInviteLink } from "@/app/actions/opportunities";
 import { OpportunityResponseForm } from "./OpportunityResponseForm";
+import { ProjectTimeline } from "@/components/projects/ProjectTimeline";
 
 type Props = {
     params: Promise<{ projectId: string }>;
@@ -53,6 +54,8 @@ export default async function OpportunityDetailPage({ params, searchParams }: Pr
 
     const opportunity = result.opportunity;
     const isExpired = opportunity.project_status === "expired";
+    const responsesClosed = !["sent", "viewed"].includes(opportunity.invite_status)
+        || ["confirmed", "in_progress", "delivered", "completed", "cancelled", "expired", "disputed"].includes(opportunity.project_status);
 
     return (
         <main className="min-h-screen bg-[#fdfbfb] px-6 py-10">
@@ -71,6 +74,12 @@ export default async function OpportunityDetailPage({ params, searchParams }: Pr
                 {isExpired && (
                     <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-semibold text-rose-800">
                         This booking has expired and is no longer accepting responses.
+                    </div>
+                )}
+
+                {responsesClosed && !isExpired && (
+                    <div className="rounded-2xl border border-stone-200 bg-white px-5 py-4 text-sm font-semibold text-stone-700">
+                        Details are available for this booking. Creator responses are currently closed.
                     </div>
                 )}
 
@@ -111,6 +120,12 @@ export default async function OpportunityDetailPage({ params, searchParams }: Pr
                 </section>
 
                 <OpportunityResponseForm opportunity={opportunity} />
+
+                <ProjectTimeline
+                    projectId={opportunity.project_id}
+                    projectStatus={opportunity.project_status}
+                    canAdd={["selected"].includes(opportunity.invite_status) || ["confirmed", "in_progress", "delivered"].includes(opportunity.project_status)}
+                />
             </div>
         </main>
     );

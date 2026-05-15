@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Briefcase, Calendar, CheckCircle, CreditCard, MapPin, ShieldCheck, Star, Wallet } from "lucide-react";
+import { ArrowLeft, Calendar, CheckCircle, CreditCard, MapPin, ShieldCheck, Star, Wallet } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import Script from "next/script";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import { listProjectDisputes, type ProjectDispute } from "@/app/actions/disputes
 import {
   getProjectQrPayment,
   submitQrPaymentProof,
+  uploadQrPaymentProofFile,
   type ProjectQrPaymentDetails,
 } from "@/app/actions/qrPayments";
 import { DisputeForm } from "./DisputeForm";
@@ -24,6 +25,7 @@ import { UpiPaymentQr } from "@/components/payments/UpiPaymentQr";
 import { formatPaymentStatus } from "@/lib/projects/statusLabels";
 import { CancelBookingButton } from "@/components/projects/CancelBookingButton";
 import { isClientProjectCancellable } from "@/lib/projects/status";
+import { ProjectTimeline } from "@/components/projects/ProjectTimeline";
 
 type PaymentRecord = {
   id: string;
@@ -99,9 +101,11 @@ export default function ProjectDetailPage() {
   const [qrPayment, setQrPayment] = useState<ProjectQrPaymentDetails | null>(null);
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentProofUrl, setPaymentProofUrl] = useState("");
+  const [paymentProofFileName, setPaymentProofFileName] = useState("");
   const [actionInviteId, setActionInviteId] = useState<string | null>(null);
   const [isPayingAdvance, setIsPayingAdvance] = useState(false);
   const [isSubmittingProof, setIsSubmittingProof] = useState(false);
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
 
   const project = detail?.project || null;
   const interestedCreators = detail?.interested_creators || [];
@@ -132,6 +136,7 @@ export default function ProjectDetailPage() {
           setQrPayment(qrResult.payment);
           setPaymentReference(qrResult.payment.payment_reference || "");
           setPaymentProofUrl(qrResult.payment.payment_proof_url || "");
+          setPaymentProofFileName(qrResult.payment.payment_proof_url ? "Payment proof uploaded" : "");
         } else {
           setQrPayment(null);
         }
@@ -303,6 +308,29 @@ export default function ProjectDetailPage() {
       toast.error(error instanceof Error ? error.message : "Could not submit payment proof.");
     } finally {
       setIsSubmittingProof(false);
+    }
+  };
+
+  const handleProofFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!project) return;
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("proof", file);
+    setIsUploadingProof(true);
+
+    try {
+      const result = await uploadQrPaymentProofFile(project.id, formData);
+      if (!result.success || !result.proofUrl) throw new Error(result.message);
+      setPaymentProofUrl(result.proofUrl);
+      setPaymentProofFileName(file.name);
+      toast.success(result.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not upload payment screenshot.");
+      event.target.value = "";
+    } finally {
+      setIsUploadingProof(false);
     }
   };
 
@@ -493,17 +521,21 @@ export default function ProjectDetailPage() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-sm font-bold text-stone-700">Screenshot/proof URL optional</span>
+                  <span className="text-sm font-bold text-stone-700">Upload payment screenshot</span>
                   <input
-                    value={paymentProofUrl}
-                    onChange={(event) => setPaymentProofUrl(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 text-sm outline-none focus:border-orange-500"
-                    placeholder="Paste uploaded screenshot URL if available"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,application/pdf"
+                    onChange={handleProofFileChange}
+                    disabled={isUploadingProof || isSubmittingProof}
+                    className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 text-sm outline-none file:mr-4 file:rounded-lg file:border-0 file:bg-orange-50 file:px-3 file:py-2 file:text-sm file:font-bold file:text-orange-700 hover:file:bg-orange-100 disabled:opacity-60"
                   />
+                  <span className="mt-2 block text-xs text-stone-500">
+                    {isUploadingProof ? "Uploading screenshot..." : paymentProofFileName || "PNG, JPG, WebP, or PDF up to 5 MB."}
+                  </span>
                 </label>
                 <button
                   onClick={handleSubmitQrProof}
-                  disabled={isSubmittingProof || !paymentReference.trim()}
+                  disabled={isSubmittingProof || isUploadingProof || !paymentReference.trim()}
                   className="md:col-span-2 px-6 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmittingProof ? "Submitting..." : "Submit Payment Proof"}
@@ -617,12 +649,10 @@ export default function ProjectDetailPage() {
           </div>
         </section>
 
+        <ProjectTimeline projectId={project.id} projectStatus={project.status} onUpdated={loadProjectDetail} />
+
         <section className="bg-white border border-stone-200 rounded-3xl p-8 shadow-sm">
-          <h2 className="text-xl font-black text-stone-900 font-display mb-3 inline-flex items-center gap-2">
-            <Briefcase className="w-5 h-5 text-orange-600" /> Timeline
-          </h2>
-          <p className="text-stone-500">Milestones and chat are not in the current schema yet. This section now avoids any mock content until those tables are added.</p>
-          <div className="mt-4 text-sm text-stone-500">Total captured so far: Rs {(totalPaid / 100).toLocaleString("en-IN")}</div>
+          <div className="text-sm text-stone-500">Total captured so far: Rs {(totalPaid / 100).toLocaleString("en-IN")}</div>
         </section>
       </div>
     </main>
