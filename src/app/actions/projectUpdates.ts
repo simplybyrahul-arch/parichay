@@ -68,6 +68,13 @@ function isParticipant(project: ProjectRow, userId: string, accountType: string 
         || project.parichay_coordinator_id === userId;
 }
 
+function canWriteTimeline(project: ProjectRow, userId: string, accountType: string | null) {
+    return accountType === "admin"
+        || project.creator_id === userId
+        || project.selected_creator_id === userId
+        || project.parichay_coordinator_id === userId;
+}
+
 async function getProjectForActor(admin: ReturnType<typeof createAdminClient>, projectId: string, userId: string, accountType: string | null) {
     const { data: project, error } = await admin
         .from("projects")
@@ -139,6 +146,9 @@ export async function addProjectUpdate(
     const admin = createAdminClient();
     const { project, error } = await getProjectForActor(admin, projectId, actor.userId, actor.accountType);
     if (!project) return { success: false, message: error || "Project not found." };
+    if (!canWriteTimeline(project, actor.userId, actor.accountType)) {
+        return { success: false, message: "Only the selected creator or ShotcutCrew team can add timeline updates." };
+    }
     if (["cancelled", "expired", "disputed"].includes(String(project.status))) {
         return { success: false, message: "Timeline updates are closed for this project." };
     }

@@ -9,6 +9,7 @@ type Props = {
     projectId: string;
     projectStatus: string;
     canAdd?: boolean;
+    emptyMessage?: string;
     onUpdated?: () => void | Promise<void>;
 };
 
@@ -21,7 +22,13 @@ const timelineStatusOptions = [
 
 const closedStatuses = new Set(["cancelled", "expired", "disputed", "completed"]);
 
-export function ProjectTimeline({ projectId, projectStatus, canAdd = true, onUpdated }: Props) {
+export function ProjectTimeline({
+    projectId,
+    projectStatus,
+    canAdd = true,
+    emptyMessage = "No timeline updates yet. Add the first milestone when work starts.",
+    onUpdated,
+}: Props) {
     const [updates, setUpdates] = useState<ProjectUpdate[]>([]);
     const [loading, setLoading] = useState(true);
     const [title, setTitle] = useState("");
@@ -109,7 +116,7 @@ export function ProjectTimeline({ projectId, projectStatus, canAdd = true, onUpd
                 <div className="text-sm text-stone-500">Loading timeline...</div>
             ) : updates.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 p-6 text-sm text-stone-500">
-                    No timeline updates yet. Add the first milestone when work starts.
+                    {emptyMessage}
                 </div>
             ) : (
                 <div className="space-y-4">
