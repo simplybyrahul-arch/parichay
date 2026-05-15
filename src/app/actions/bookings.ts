@@ -137,7 +137,7 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
                 requirement_summary: booking.requirementSummary,
                 expires_at: expiresAt,
             })
-            .select("id")
+            .select("id, created_at")
             .single();
 
         if (projectError || !project) {
@@ -148,12 +148,14 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
         let matches;
         try {
             matches = await matchCreators(admin, {
+                projectId: project.id,
                 bookingType: booking.bookingType,
                 bookingLocation: booking.bookingLocation,
+                eventDate: booking.eventDate,
+                bookingCreatedAt: project.created_at,
                 budget: booking.budget,
                 estimatedDays: booking.estimatedDays,
                 requirementSummary: booking.requirementSummary,
-                limit: 20,
             });
         } catch (error) {
             console.error("Creator matching error:", error);

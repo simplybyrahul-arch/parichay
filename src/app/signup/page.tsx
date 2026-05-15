@@ -6,12 +6,26 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { signup } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
+import { creatorServiceOptions } from "@/lib/creators/services";
 
 export default function SignupPage() {
     const [accountType, setAccountType] = useState<"client" | "creator" | null>(null);
     const [creatorType, setCreatorType] = useState<"studio_owner" | "freelancer" | null>(null);
     const [step, setStep] = useState(1); // 1=account type, 2=creator sub-type, 3=credentials
     const [formData, setFormData] = useState({ name: "", email: "", password: "", confirmPassword: "" });
+    const [creatorForm, setCreatorForm] = useState({
+        phone: "",
+        whatsappPhone: "",
+        city: "",
+        state: "",
+        role: "",
+        dayRate: "",
+        portfolioUrl: "",
+        whatsappOptIn: true,
+        availableForBooking: true,
+        travelEnabled: false,
+        budgetFlexibility: false,
+    });
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
     
@@ -55,11 +69,55 @@ export default function SignupPage() {
             return;
         }
 
+        if (accountType === "creator") {
+            if (!creatorType) {
+                setErrorMsg("Please choose Freelancer or Studio Owner.");
+                setLoading(false);
+                return;
+            }
+
+            const cleanedPhone = creatorForm.phone.replace(/[^\d+]/g, "");
+            if (cleanedPhone.length < 10) {
+                setErrorMsg("Please enter a valid phone number.");
+                setLoading(false);
+                return;
+            }
+
+            if (!creatorForm.city.trim()) {
+                setErrorMsg("Please enter your city.");
+                setLoading(false);
+                return;
+            }
+
+            if (!creatorForm.role) {
+                setErrorMsg("Please select your primary service.");
+                setLoading(false);
+                return;
+            }
+
+            if (creatorForm.dayRate && Number(creatorForm.dayRate) <= 0) {
+                setErrorMsg("Base day rate must be positive if provided.");
+                setLoading(false);
+                return;
+            }
+        }
+
         try {
             const data = new FormData();
             data.append("name", formData.name);
             data.append("email", formData.email);
             data.append("password", formData.password);
+            data.append("phone", creatorForm.phone);
+            data.append("whatsapp_phone", creatorForm.whatsappPhone || (creatorForm.whatsappOptIn ? creatorForm.phone : ""));
+            data.append("city", creatorForm.city);
+            data.append("state", creatorForm.state);
+            data.append("role", creatorForm.role);
+            data.append("day_rate", creatorForm.dayRate);
+            data.append("portfolio_url", creatorForm.portfolioUrl);
+            data.append("whatsapp_opt_in", String(creatorForm.whatsappOptIn));
+            data.append("available_for_booking", String(creatorForm.availableForBooking));
+            data.append("travel_enabled", String(creatorForm.travelEnabled));
+            data.append("budget_flexibility", String(creatorForm.budgetFlexibility));
 
             await signup(data, accountType || "client", creatorType || undefined);
         } catch {
@@ -244,6 +302,114 @@ export default function SignupPage() {
                                     </div>
                                 </div>
 
+                                {accountType === "creator" && (
+                                    <div className="space-y-5 rounded-2xl border border-stone-100 bg-stone-50/70 p-5">
+                                        <div>
+                                            <h2 className="text-sm font-black uppercase tracking-wide text-stone-700">
+                                                {creatorType === "studio_owner" ? "Studio matching details" : "Freelancer matching details"}
+                                            </h2>
+                                            <p className="text-xs text-stone-500 mt-1">
+                                                These details help ShotcutCrew send you relevant booking opportunities.
+                                            </p>
+                                        </div>
+
+                                        <div className="grid md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-bold text-stone-700 mb-1.5">Phone Number</label>
+                                                <input
+                                                    type="tel"
+                                                    value={creatorForm.phone}
+                                                    onChange={(e) => setCreatorForm({ ...creatorForm, phone: e.target.value })}
+                                                    placeholder="10 digit mobile number"
+                                                    required
+                                                    className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-stone-700 mb-1.5">WhatsApp Number</label>
+                                                <input
+                                                    type="tel"
+                                                    value={creatorForm.whatsappPhone}
+                                                    onChange={(e) => setCreatorForm({ ...creatorForm, whatsappPhone: e.target.value })}
+                                                    placeholder="Leave blank to use phone"
+                                                    className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-stone-700 mb-1.5">City</label>
+                                                <input
+                                                    type="text"
+                                                    value={creatorForm.city}
+                                                    onChange={(e) => setCreatorForm({ ...creatorForm, city: e.target.value })}
+                                                    placeholder="e.g. Bilaspur"
+                                                    required
+                                                    className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-stone-700 mb-1.5">State</label>
+                                                <input
+                                                    type="text"
+                                                    value={creatorForm.state}
+                                                    onChange={(e) => setCreatorForm({ ...creatorForm, state: e.target.value })}
+                                                    placeholder="e.g. Chhattisgarh"
+                                                    className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-bold text-stone-700 mb-1.5">
+                                                {creatorType === "studio_owner" ? "Studio Services" : "Primary Service"}
+                                            </label>
+                                            <select
+                                                value={creatorForm.role}
+                                                onChange={(e) => setCreatorForm({ ...creatorForm, role: e.target.value })}
+                                                required
+                                                className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+                                            >
+                                                <option value="">Select primary service</option>
+                                                {creatorServiceOptions.map((option) => (
+                                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="grid md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-bold text-stone-700 mb-1.5">Base Day Rate</label>
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    value={creatorForm.dayRate}
+                                                    onChange={(e) => setCreatorForm({ ...creatorForm, dayRate: e.target.value })}
+                                                    placeholder="Format: 15000"
+                                                    className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-stone-700 mb-1.5">
+                                                    {creatorType === "studio_owner" ? "Studio Portfolio URL" : "Portfolio URL"}
+                                                </label>
+                                                <input
+                                                    type="url"
+                                                    value={creatorForm.portfolioUrl}
+                                                    onChange={(e) => setCreatorForm({ ...creatorForm, portfolioUrl: e.target.value })}
+                                                    placeholder="https://yourportfolio.com"
+                                                    className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid sm:grid-cols-2 gap-3">
+                                            <ToggleLabel label="WhatsApp opt-in" checked={creatorForm.whatsappOptIn} onChange={(checked) => setCreatorForm({ ...creatorForm, whatsappOptIn: checked })} />
+                                            <ToggleLabel label="Available for booking" checked={creatorForm.availableForBooking} onChange={(checked) => setCreatorForm({ ...creatorForm, availableForBooking: checked })} />
+                                            <ToggleLabel label="Travel enabled" checked={creatorForm.travelEnabled} onChange={(checked) => setCreatorForm({ ...creatorForm, travelEnabled: checked })} />
+                                            <ToggleLabel label="Budget flexibility" checked={creatorForm.budgetFlexibility} onChange={(checked) => setCreatorForm({ ...creatorForm, budgetFlexibility: checked })} />
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div>
                                     <label className="block text-sm font-bold text-stone-700 mb-1.5">Password</label>
                                     <div className="relative">
@@ -313,5 +479,19 @@ export default function SignupPage() {
                 </AnimatePresence>
             </div>
         </main>
+    );
+}
+
+function ToggleLabel({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+    return (
+        <label className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700">
+            <span>{label}</span>
+            <input
+                type="checkbox"
+                checked={checked}
+                onChange={(event) => onChange(event.target.checked)}
+                className="h-4 w-4 rounded border-stone-300 text-orange-600 focus:ring-orange-500"
+            />
+        </label>
     );
 }

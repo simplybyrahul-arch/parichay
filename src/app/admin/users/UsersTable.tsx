@@ -12,6 +12,13 @@ type UserData = {
     created_at: string;
     creator_verified: boolean;
     creator_role?: string;
+    creator_city?: string | null;
+    creator_phone?: string | null;
+    creator_whatsapp_phone?: string | null;
+    creator_day_rate?: number | null;
+    creator_available_for_booking?: boolean | null;
+    creator_travel_enabled?: boolean | null;
+    creator_service_cities?: string[] | null;
 };
 
 export const UsersTable = ({ users }: { users: UserData[] }) => {
@@ -51,9 +58,23 @@ export const UsersTable = ({ users }: { users: UserData[] }) => {
                                 </td>
                                 <td className="px-6 py-4">
                                     {user.account_type === 'creator' ? (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                                            {user.creator_role || 'Creator'}
-                                        </span>
+                                        <div className="space-y-1">
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                                                {user.creator_role || 'Creator'}
+                                            </span>
+                                            <div className="text-xs text-stone-500">
+                                                {user.creator_city || "City not set"} · Rs {(user.creator_day_rate || 0).toLocaleString("en-IN")}/day
+                                            </div>
+                                            <div className="text-xs text-stone-500">
+                                                Phone: {user.creator_phone || user.creator_whatsapp_phone || "Not set"}
+                                            </div>
+                                            <div className="text-xs text-stone-500">
+                                                {user.creator_available_for_booking === false ? "Unavailable" : "Available"} · {user.creator_travel_enabled ? "Travel enabled" : "Local only"}
+                                            </div>
+                                            {user.creator_service_cities?.length ? (
+                                                <div className="text-xs text-stone-500">Cities: {user.creator_service_cities.join(", ")}</div>
+                                            ) : null}
+                                        </div>
                                     ) : (
                                         <span className="text-stone-400">-</span>
                                     )}

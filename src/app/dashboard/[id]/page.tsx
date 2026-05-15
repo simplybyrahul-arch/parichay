@@ -21,6 +21,9 @@ import {
 } from "@/app/actions/qrPayments";
 import { DisputeForm } from "./DisputeForm";
 import { UpiPaymentQr } from "@/components/payments/UpiPaymentQr";
+import { formatPaymentStatus } from "@/lib/projects/statusLabels";
+import { CancelBookingButton } from "@/components/projects/CancelBookingButton";
+import { isClientProjectCancellable } from "@/lib/projects/status";
 
 type PaymentRecord = {
   id: string;
@@ -168,6 +171,7 @@ export default function ProjectDetailPage() {
     (project && selectionLockedStatuses.has(project.status))
   );
   const isExpired = project?.status === "expired";
+  const isCancelled = project?.status === "cancelled";
   const latestDispute = disputes[0] || null;
   const disputeWindowOpen = Boolean(project?.status === "delivered" && project.delivered_at && Date.now() - new Date(project.delivered_at).getTime() <= 48 * 60 * 60 * 1000);
   const disputeWindowClosed = Boolean(project?.status === "delivered" && project.delivered_at && Date.now() - new Date(project.delivered_at).getTime() > 48 * 60 * 60 * 1000);
@@ -358,9 +362,15 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
+          {isCancelled && (
+            <div className="mt-6 rounded-2xl border border-stone-200 bg-stone-50 p-5">
+              <div className="text-sm font-bold text-stone-800">This booking has been cancelled.</div>
+            </div>
+          )}
+
           <div className="grid sm:grid-cols-3 gap-4 mt-8">
             <InfoTile label="Budget" value={formatCurrency(project.budget)} />
-            <InfoTile label="Payment Status" value={project.payment_status || "not_required"} />
+            <InfoTile label="Payment Status" value={formatPaymentStatus(project.payment_status, project.status, project.selected_creator_id)} />
             <InfoTile label="Interested Creators" value={`${interestedCreators.length}`} />
           </div>
 
@@ -397,6 +407,12 @@ export default function ProjectDetailPage() {
               <div className="text-sm font-bold text-green-900">
                 {project.parichay_coordinator_name || "A Parichay team member"}
               </div>
+            </div>
+          )}
+
+          {isClientProjectCancellable(project.status, project.payment_status, project.selected_creator_id) && (
+            <div className="mt-6">
+              <CancelBookingButton projectId={project.id} onCancelled={loadProjectDetail} />
             </div>
           )}
         </section>
@@ -451,7 +467,9 @@ export default function ProjectDetailPage() {
 
             <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
               <div className="text-xs font-bold uppercase tracking-wide text-stone-500 mb-1">Payment Status</div>
-              <div className="font-bold text-stone-900 capitalize">{(project.payment_status || qrPayment.payment_status).replace(/_/g, " ")}</div>
+              <div className="font-bold text-stone-900">
+                {formatPaymentStatus(project.payment_status || qrPayment.payment_status, project.status, project.selected_creator_id)}
+              </div>
               {project.payment_status === "proof_uploaded" && (
                 <p className="text-sm text-orange-700 mt-2">Payment proof submitted. Waiting for coordinator/admin verification.</p>
               )}

@@ -18,7 +18,17 @@ export function OpportunityResponseForm({ opportunity }: Props) {
     const [isPending, startTransition] = useTransition();
 
     const isExpired = opportunity.project_status === "expired";
+    const isCancelled = opportunity.project_status === "cancelled";
     const canRespond = !closedProjectStatuses.has(opportunity.project_status) && ["sent", "viewed"].includes(inviteStatus);
+    const closedMessage = isCancelled
+        ? "This booking has been cancelled and is no longer accepting responses."
+        : isExpired
+            ? "This booking has expired and is no longer accepting responses."
+            : inviteStatus === "interested"
+                ? "Interested submitted"
+                : inviteStatus === "declined"
+                    ? "Declined"
+                    : "This booking is no longer accepting responses.";
 
     const submitResponse = (status: "interested" | "declined") => {
         startTransition(async () => {
@@ -86,10 +96,7 @@ export function OpportunityResponseForm({ opportunity }: Props) {
                     </>
                 ) : (
                     <div className="w-full rounded-xl bg-stone-50 border border-stone-200 px-4 py-3 text-sm font-semibold text-stone-600">
-                        {isExpired && "This booking has expired and is no longer accepting responses."}
-                        {inviteStatus === "interested" && "Interested submitted"}
-                        {inviteStatus === "declined" && "Declined"}
-                        {!isExpired && !["interested", "declined"].includes(inviteStatus) && "This booking is no longer accepting responses."}
+                        {closedMessage}
                     </div>
                 )}
             </div>

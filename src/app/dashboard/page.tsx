@@ -21,12 +21,17 @@ import Script from "next/script";
 import { toast } from "sonner";
 import { logout } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
+import { CancelBookingButton } from "@/components/projects/CancelBookingButton";
+import { isClientProjectCancellable } from "@/lib/projects/status";
 
 type Project = {
     id: string;
     title: string;
+    description: string | null;
     budget: number;
     status: string;
+    payment_status: string | null;
+    selected_creator_id: string | null;
     created_at: string;
 };
 
@@ -89,7 +94,7 @@ export default function Dashboard() {
             .order('created_at', { ascending: false });
 
         if (error) throw error;
-        return data || [];
+        return (data || []) as Project[];
     };
 
     const { data: projects = [], isValidating: loading, mutate } = useSWR(
@@ -438,7 +443,9 @@ export default function Dashboard() {
                                                                 {project.status === 'pending' ? '○ Unfunded' : '● Funded'}
                                                             </div>
                                                         </div>
-                                                        {project.status === 'pending' ? (
+                                                        {isClientProjectCancellable(project.status, project.payment_status, project.selected_creator_id) ? (
+                                                            <CancelBookingButton projectId={project.id} onCancelled={async () => { await mutate(); }} compact />
+                                                        ) : project.status === 'pending' ? (
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleFundEscrow(project); }}
                                                                 disabled={isFunding === project.id}

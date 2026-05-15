@@ -21,6 +21,13 @@ export default async function UsersPage() {
             ...user,
             creator_verified: creatorData?.verified || false,
             creator_role: creatorData?.role,
+            creator_city: creatorData?.city,
+            creator_phone: creatorData?.phone,
+            creator_whatsapp_phone: creatorData?.whatsapp_phone,
+            creator_day_rate: creatorData?.day_rate,
+            creator_available_for_booking: creatorData?.available_for_booking,
+            creator_travel_enabled: creatorData?.travel_enabled,
+            creator_service_cities: creatorData?.service_cities,
         };
     }) || [];
 
