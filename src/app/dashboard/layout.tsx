@@ -2,7 +2,7 @@ import { Metadata } from "next";
 
 export const metadata: Metadata = {
     title: "Client Dashboard",
-    description: "Manage your creative projects, view escrow status, and communicate with creators.",
+    description: "Manage your creative projects, view payment status, and communicate with creators.",
     robots: {
         index: false,
         follow: false,

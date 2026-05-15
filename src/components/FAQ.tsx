@@ -6,23 +6,23 @@ import { motion, AnimatePresence } from "framer-motion";
 const faqs = [
     {
         question: "How are creators verified on Shotcutcrew?",
-        answer: "Every creator goes through KYC, portfolio review and reference checks before being listed. Their credentials are then issued as blockchain-verified identities — permanently verifiable by any client on the platform.",
+        answer: "Every creator goes through profile, portfolio, and service review before being listed for client bookings.",
     },
     {
-        question: "How does escrow payment work?",
-        answer: "When you book a shoot, your payment is locked in a smart contract. Funds are only released in milestones as deliverables are confirmed — protecting you at every stage of the project.",
+        question: "How does advance payment work?",
+        answer: "After you select a creator, payment is collected securely through Razorpay test or live mode depending on your environment. Automated settlement, refunds and smart-contract release are future platform workflows.",
     },
     {
         question: "Can I book a full production crew at once?",
-        answer: "Yes. Use Builder Mode to assemble a complete crew — DOP, photographer, editor, equipment — and get a real-time cost estimate before you confirm.",
+        answer: "Yes. Use Builder Mode to assemble a complete crew, including DOP, photographer, editor and equipment, and get a real-time cost estimate before you confirm.",
     },
     {
         question: "How does AI Script Analysis work?",
-        answer: "Upload your script or production brief. Our AI reads the requirements and outputs an estimated crew size, equipment list, timeline and budget — in seconds.",
+        answer: "Upload your script or production brief. Our AI reads the requirements and outputs an estimated crew size, equipment list, timeline and budget in seconds.",
     },
     {
         question: "Is Shotcutcrew available outside Bilaspur?",
-        answer: "We're launching in Bilaspur, Chhattisgarh first — then scaling to major metros and nationally. Sign up to be notified when we launch in your city.",
+        answer: "We're launching in Bilaspur, Chhattisgarh first, then scaling to major metros and nationally. Sign up to be notified when we launch in your city.",
     },
     {
         question: "I'm a creator. How do I join?",

@@ -119,7 +119,7 @@ export default function Dashboard() {
 
     const handleFundEscrow = async (project: Project) => {
         setIsFunding(project.id);
-        const toastId = toast.loading("Initializing secure escrow payment...");
+        const toastId = toast.loading("Initializing secure payment...");
 
         try {
             // 1. Create order on the server
@@ -140,8 +140,8 @@ export default function Dashboard() {
                 key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_placeholder",
                 amount: orderData.amount,
                 currency: orderData.currency,
-                name: "ShotcutCrew Creative Escrow",
-                description: `Funding for Project: ${project.title}`,
+                name: "ShotcutCrew Creative Payment",
+                description: `Payment for Project: ${project.title}`,
                 order_id: orderData.orderId,
                 handler: async function (response: RazorpaySuccessResponse) {
                     toast.loading("Verifying payment...", { id: toastId });
@@ -161,7 +161,7 @@ export default function Dashboard() {
                     const verifyData = await verifyRes.json();
 
                     if (verifyRes.ok && verifyData.success) {
-                        toast.success("Successfully funded Escrow! Developer will be notified.", { id: toastId });
+                        toast.success("Payment received. Creator will be notified.", { id: toastId });
                         mutate(); // refresh data via SWR
                     } else {
                         toast.error(verifyData.error || "Verification failed", { id: toastId });
@@ -245,7 +245,7 @@ export default function Dashboard() {
                 />
                 <NavItem
                     icon={<CreditCard className="w-5 h-5" />}
-                    label="Billing & Escrow"
+                    label="Billing & Payments"
                     isActive={activeTab === "billing"}
                     onClick={() => { setActiveTab("billing"); setMobileMenuOpen(false); }}
                 />
@@ -364,7 +364,7 @@ export default function Dashboard() {
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <StatCard title="Total Committed" value={`₹${totalSpent.toLocaleString()}`} trend="Lifetime volume" icon={<CreditCard className="w-5 h-5 text-orange-600" />} />
                                     <StatCard title="Active Projects" value={activeProjectCount.toString()} trend="Currently ongoing" icon={<Briefcase className="w-5 h-5 text-blue-600" />} />
-                                    <StatCard title="Escrow Balance" value="₹0" trend="Awaiting milestone" icon={<LayoutDashboard className="w-5 h-5 text-green-600" />} />
+                                    <StatCard title="Payment Balance" value="₹0" trend="Awaiting milestone" icon={<LayoutDashboard className="w-5 h-5 text-green-600" />} />
                                 </div>
 
                                 {/* Active Projects List */}
@@ -430,7 +430,7 @@ export default function Dashboard() {
                                                         </div>
                                                     </div>
 
-                                                    {/* Escrow & Action */}
+                                                    {/* Payment & Action */}
                                                     <div className="flex items-center justify-between lg:justify-end gap-6 lg:w-48">
                                                         <div className="text-right flex-1">
                                                             <div className="font-bold text-stone-900">₹{project.budget.toLocaleString()}</div>
@@ -444,7 +444,7 @@ export default function Dashboard() {
                                                                 disabled={isFunding === project.id}
                                                                 className="px-4 py-2 bg-orange-600 text-white text-xs font-bold rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50"
                                                             >
-                                                                {isFunding === project.id ? "Securing..." : "Fund Escrow"}
+                                                                {isFunding === project.id ? "Securing..." : "Pay Now"}
                                                             </button>
                                                         ) : (
                                                             <ChevronRightIcon className="w-5 h-5 text-stone-400 group-hover:text-orange-500 transition-colors" />
@@ -477,8 +477,8 @@ export default function Dashboard() {
                         {activeTab === "billing" && (
                             <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
                                 <CreditCard className="w-16 h-16 text-orange-200 mb-4" />
-                                <h2 className="text-2xl font-bold text-stone-900 mb-2">Billing & Escrow</h2>
-                                <p className="text-stone-500 max-w-md">Manage your payment methods, fund escrows safely, and review past invoices natively.</p>
+                                <h2 className="text-2xl font-bold text-stone-900 mb-2">Billing & Payments</h2>
+                                <p className="text-stone-500 max-w-md">Manage your payment methods, complete secure payments, and review past invoices natively.</p>
                             </div>
                         )}
 

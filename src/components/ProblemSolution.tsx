@@ -26,7 +26,7 @@ const problems = [
     {
         icon: <Lock className="w-6 h-6 text-stone-500" />,
         title: "No payment protection",
-        desc: "Payments over cash or UPI with zero escrow. Clients risk losing money. Creators risk not getting paid."
+        desc: "Payments over cash or UPI offer no platform record. Clients risk losing money. Creators risk not getting paid."
     },
     {
         icon: <Smartphone className="w-6 h-6 text-stone-500" />,
@@ -44,7 +44,7 @@ const pillars = [
     {
         icon: <Layers className="w-8 h-8 text-rose-500" />,
         title: "STRUCTURE",
-        desc: "Escrow payments, quality governance, AI planning and immutable reputation at every step of the shoot."
+        desc: "Secure payments, quality governance, AI planning and reputation tracking at every step of the shoot."
     },
     {
         icon: <Globe className="w-8 h-8 text-blue-500" />,

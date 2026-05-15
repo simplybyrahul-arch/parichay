@@ -1,27 +1,37 @@
 "use client";
 import { motion } from "framer-motion";
-import { Shield, Lock, Star, Cpu } from "lucide-react";
+import { BadgeCheck, ClipboardCheck, CreditCard, Network, ShieldCheck, Users } from "lucide-react";
 
 const pillars = [
     {
-        icon: <Shield className="w-6 h-6 text-orange-500" />,
-        title: "BLOCKCHAIN-VERIFIED IDENTITY",
-        desc: "Every creator undergoes KYC and portfolio verification. Credentials are issued as Decentralised Identifiers (DIDs) on the blockchain — tamper-proof and permanently verifiable."
+        icon: <BadgeCheck className="w-6 h-6 text-orange-500" />,
+        title: "Verified Creative Professionals",
+        desc: "Every creator, studio, and service provider is reviewed before they can receive client bookings."
     },
     {
-        icon: <Lock className="w-6 h-6 text-rose-500" />,
-        title: "SMART CONTRACT ESCROW",
-        desc: "All bookings are governed by smart contracts. Client funds are locked in escrow and released only upon verified delivery. Both sides are protected on every shoot."
+        icon: <ShieldCheck className="w-6 h-6 text-rose-500" />,
+        title: "Parichay Shoot Assurance",
+        desc: "For selected shoots, a ShotcutCrew coordinator helps manage communication, verification, and onsite coordination."
     },
     {
-        icon: <Star className="w-6 h-6 text-amber-500" />,
-        title: "IMMUTABLE REPUTATION LEDGER",
-        desc: "Every completed shoot, client rating and delivery timestamp is written permanently on-chain. Ratings cannot be manipulated, deleted or faked. Ever."
+        icon: <Users className="w-6 h-6 text-amber-500" />,
+        title: "Transparent Booking Flow",
+        desc: "Clients can compare interested creators, review profiles, shortlist options, and choose the right professional before confirmation."
     },
     {
-        icon: <Cpu className="w-6 h-6 text-blue-500" />,
-        title: "AI-ANCHORED PLANNING",
-        desc: "AI production planning outputs are anchored on-chain for audit and accountability. Every estimate is transparent and traceable."
+        icon: <CreditCard className="w-6 h-6 text-blue-500" />,
+        title: "Secure Payment Tracking",
+        desc: "Payments are tracked project-wise with proof, verification, and admin visibility for better trust and accountability."
+    },
+    {
+        icon: <Network className="w-6 h-6 text-emerald-500" />,
+        title: "Local Production Network",
+        desc: "Find photographers, videographers, editors, studios, equipment providers, and production crew based on location and service needs."
+    },
+    {
+        icon: <ClipboardCheck className="w-6 h-6 text-violet-500" />,
+        title: "Admin-Monitored Workflow",
+        desc: "Bookings, creator responses, payment status, disputes, and coordinator assignments can be monitored by the ShotcutCrew team."
     }
 ];
 
@@ -39,27 +49,27 @@ export const TrustSection = () => {
                 >
                     <div className="max-w-2xl">
                         <div className="inline-flex items-center px-4 py-2 rounded-full border border-stone-700 bg-stone-800 text-stone-300 text-sm font-bold mb-6 tracking-wide uppercase">
-                            Why Shotcutcrew is Different
+                            Why ShotcutCrew is Different
                         </div>
                         <h2 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight mb-6 font-display text-white">
-                            Trust isn&apos;t a feature here.<br />
-                            <span className="text-orange-500">It&apos;s the foundation.</span>
+                            Built for trust from<br />
+                            <span className="text-orange-500">booking to delivery.</span>
                         </h2>
                     </div>
                     <p className="text-lg md:text-xl text-stone-400 max-w-md font-medium leading-relaxed pb-2">
-                        Shotcutcrew is powered by Hyperledger Fabric — India&apos;s first blockchain-secured creative production platform.
+                        ShotcutCrew helps clients book verified creative professionals with clear responses, coordinator support, and payment visibility.
                     </p>
                 </motion.div>
 
-                <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {pillars.map((pillar, index) => (
                         <motion.div
                             key={index}
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true, margin: "-50px" }}
-                            transition={{ delay: index * 0.1 }}
-                            className="bg-stone-800/50 backdrop-blur-md p-8 md:p-10 rounded-[2rem] border border-stone-700 hover:border-orange-500/50 transition-colors"
+                            transition={{ delay: index * 0.08 }}
+                            className="bg-stone-800/50 backdrop-blur-md p-8 rounded-[2rem] border border-stone-700 hover:border-orange-500/50 transition-colors"
                         >
                             <div className="w-14 h-14 bg-stone-900 rounded-2xl flex items-center justify-center mb-6 border border-stone-700">
                                 {pillar.icon}

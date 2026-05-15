@@ -39,7 +39,7 @@ export const AnalyticsCharts = ({
             </div>
 
             <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm">
-                <h3 className="font-bold text-stone-900 mb-6">Escrow Volume (INR)</h3>
+                <h3 className="font-bold text-stone-900 mb-6">Payment Volume (INR)</h3>
                 <div className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={paymentData}>

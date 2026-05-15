@@ -16,7 +16,7 @@ const steps = [
     {
         icon: <CreditCard className="w-6 h-6 text-emerald-400" />,
         title: "03  SHOOT & PAY SECURELY",
-        description: "Funds are held in smart contract escrow and released only when deliverables are confirmed. Your money is protected at every milestone.",
+        description: "Pay through the platform after selecting a creator. The booking is confirmed only after server-side payment verification.",
     }
 ];
 

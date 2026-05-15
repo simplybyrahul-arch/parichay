@@ -22,7 +22,7 @@ export default async function AdminDashboard() {
         .select("amount")
         .eq("status", "captured");
 
-    const totalEscrow = payments?.reduce((acc, curr) => acc + curr.amount, 0) || 0;
+    const totalPayments = payments?.reduce((acc, curr) => acc + curr.amount, 0) || 0;
 
     const stats = [
         {
@@ -44,8 +44,8 @@ export default async function AdminDashboard() {
             description: "Currently funded or in progress",
         },
         {
-            name: "Total Escrow Vol",
-            value: `₹${(totalEscrow / 100).toLocaleString('en-IN')}`, // Amount is in paise
+            name: "Total Payment Vol",
+            value: `₹${(totalPayments / 100).toLocaleString('en-IN')}`, // Amount is in paise
             icon: IndianRupee,
             description: "Captured and secured",
         },

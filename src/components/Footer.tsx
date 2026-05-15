@@ -1,5 +1,5 @@
 "use client";
-import { ArrowRight, Twitter, Instagram, Linkedin, Globe } from "lucide-react";
+import { ArrowRight, Twitter, Instagram, Linkedin, Globe, Mail, Phone } from "lucide-react";
 import Link from "next/link";
 
 export const Footer = () => {
@@ -17,8 +17,8 @@ export const Footer = () => {
                             <span className="text-gradient from-orange-600 to-rose-500">production?</span>
                         </h2>
                         <p className="text-stone-600 text-lg md:text-xl font-medium mb-10 leading-relaxed">
-                            Join India&apos;s first verified, blockchain-powered<br className="hidden md:block" />
-                            creative production marketplace.
+                            Book verified creative professionals with clear responses,<br className="hidden md:block" />
+                            coordinator support, and payment tracking.
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4 mb-8">
@@ -46,7 +46,7 @@ export const Footer = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 lg:gap-12 mb-16">
                     <div className="col-span-2 lg:col-span-2">
                         <div className="mb-6 font-black text-2xl tracking-tighter text-stone-900">
-                            SHOTCUTCREW™
+                            SHOTCUTCREW
                         </div>
                         <p className="text-stone-500 leading-relaxed max-w-sm mb-4">
                             The AI-enabled marketplace connecting clients with India&apos;s verified creative production professionals.
@@ -56,16 +56,17 @@ export const Footer = () => {
                         </p>
                         <div className="space-y-2 mb-8">
                             <p className="flex items-center gap-2 text-stone-500 hover:text-stone-800 font-medium transition-colors">
-                                📧 <a href="mailto:rahul@shotcutcrew.com">rahul@shotcutcrew.com</a>
+                                <Mail className="w-4 h-4" /> <a href="mailto:rahul@shotcutcrew.com">rahul@shotcutcrew.com</a>
                             </p>
                             <p className="flex items-center gap-2 text-stone-500 hover:text-stone-800 font-medium transition-colors">
-                                📞 <a href="tel:+919691912205">+91 9691912205</a>
+                                <Phone className="w-4 h-4" /> <a href="tel:+919691912205">+91 9691912205</a>
                             </p>
                         </div>
                         <div className="flex items-center gap-4">
-                            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" title="Twitter" aria-label="Twitter" className="text-stone-400 hover:text-orange-500 transition-colors"><Twitter className="w-5 h-5" /></a>
-                            <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" title="Instagram" aria-label="Instagram" className="text-stone-400 hover:text-orange-500 transition-colors"><Instagram className="w-5 h-5" /></a>
-                            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" title="LinkedIn" aria-label="LinkedIn" className="text-stone-400 hover:text-orange-500 transition-colors"><Linkedin className="w-5 h-5" /></a>
+                            {/* TODO: Replace with verified official ShotcutCrew social URLs before production launch. */}
+                            <a href="https://x.com/shotcutcrew" target="_blank" rel="noopener noreferrer" title="Twitter/X" aria-label="Twitter/X" className="text-stone-400 hover:text-orange-500 transition-colors"><Twitter className="w-5 h-5" /></a>
+                            <a href="https://www.instagram.com/shotcutcrew" target="_blank" rel="noopener noreferrer" title="Instagram" aria-label="Instagram" className="text-stone-400 hover:text-orange-500 transition-colors"><Instagram className="w-5 h-5" /></a>
+                            <a href="https://www.linkedin.com/company/shotcutcrew" target="_blank" rel="noopener noreferrer" title="LinkedIn" aria-label="LinkedIn" className="text-stone-400 hover:text-orange-500 transition-colors"><Linkedin className="w-5 h-5" /></a>
                         </div>
                     </div>
 
@@ -83,8 +84,6 @@ export const Footer = () => {
                         <h4 className="font-bold text-stone-900 mb-4 tracking-wide font-display">Company</h4>
                         <ul className="space-y-3">
                             <li><Link href="#about" className="text-stone-500 hover:text-orange-600 transition-colors">About Us</Link></li>
-                            <li><Link href="/careers" className="text-stone-500 hover:text-orange-600 transition-colors">Careers</Link></li>
-                            <li><Link href="/blog" className="text-stone-500 hover:text-orange-600 transition-colors">Blog</Link></li>
                             <li><Link href="/contact" className="text-stone-500 hover:text-orange-600 transition-colors">Contact Us</Link></li>
                         </ul>
                     </div>
@@ -101,7 +100,7 @@ export const Footer = () => {
 
                 {/* Copyright */}
                 <div className="pt-8 border-t border-stone-200 flex flex-col md:flex-row items-center justify-between text-stone-400 text-sm gap-4">
-                    <p>© 2025 Shotcutcrew &middot; Parichay Production Pvt Ltd &middot; All rights reserved.</p>
+                    <p>&copy; 2026 ShotcutCrew . Parichay Production Pvt Ltd . All rights reserved.</p>
                     <div className="flex gap-6">
                         <span className="flex items-center gap-1.5 hover:text-stone-700 cursor-pointer transition-colors">
                             <Globe className="w-4 h-4" />

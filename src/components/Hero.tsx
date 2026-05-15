@@ -64,7 +64,7 @@ export const Hero = () => {
                     transition={{ duration: 0.5, delay: 0.2 }}
                     className="text-lg md:text-xl text-stone-700 mb-12 max-w-3xl mx-auto font-medium leading-relaxed drop-shadow-sm"
                 >
-                    Shotcutcrew connects clients with verified photographers, videographers, editors, studios and equipment providers — with AI-powered planning and blockchain-secured payments built in from the start.
+                    ShotcutCrew connects clients with verified photographers, videographers, editors, studios and equipment providers, with AI-powered planning and transparent payment tracking built in.
                 </motion.p>
 
                 <motion.div
@@ -99,7 +99,7 @@ export const Hero = () => {
                     <span className="hidden md:inline text-stone-300">&middot;</span>
                     <span className="flex items-center gap-1.5"><span className="text-orange-500 text-lg leading-none">✓</span> Bilaspur, Chhattisgarh</span>
                     <span className="hidden md:inline text-stone-300">&middot;</span>
-                    <span className="flex items-center gap-1.5"><span className="text-orange-500 text-lg leading-none">✓</span> Blockchain-Secured Payments</span>
+                    <span className="flex items-center gap-1.5"><span className="text-orange-500 text-lg leading-none">✓</span> Transparent Payment Tracking</span>
                     <span className="hidden md:inline text-stone-300">&middot;</span>
                     <span className="flex items-center gap-1.5"><span className="text-orange-500 text-lg leading-none">✓</span> Built on 8+ Years Industry Experience</span>
                 </motion.div>
