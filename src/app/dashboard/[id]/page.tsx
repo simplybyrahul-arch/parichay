@@ -649,7 +649,13 @@ export default function ProjectDetailPage() {
           </div>
         </section>
 
-        <ProjectTimeline projectId={project.id} projectStatus={project.status} onUpdated={loadProjectDetail} />
+        <ProjectTimeline
+          projectId={project.id}
+          projectStatus={project.status}
+          canAdd={false}
+          emptyMessage="No timeline updates yet. The selected creator will post work milestones here."
+          onUpdated={loadProjectDetail}
+        />
 
         <section className="bg-white border border-stone-200 rounded-3xl p-8 shadow-sm">
           <div className="text-sm text-stone-500">Total captured so far: Rs {(totalPaid / 100).toLocaleString("en-IN")}</div>

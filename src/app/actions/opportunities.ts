@@ -104,6 +104,40 @@ async function getInviteForCreator(projectId: string, creatorId: string) {
     return { admin, invite, project, error: null };
 }
 
+async function getAssignedProjectForCreator(projectId: string, creatorId: string) {
+    const admin = createAdminClient();
+
+    const { data: project, error } = await admin
+        .from("projects")
+        .select("id, title, description, booking_type, booking_location, event_date, estimated_days, budget, requirement_summary, status, creator_id, selected_creator_id, created_at")
+        .eq("id", projectId)
+        .single();
+
+    if (error || !project) {
+        return { admin, invite: null, project: null, error: "Project details could not be loaded." };
+    }
+
+    if (project.creator_id !== creatorId && project.selected_creator_id !== creatorId) {
+        return { admin, invite: null, project: null, error: "Opportunity not found or you do not have access." };
+    }
+
+    return {
+        admin,
+        invite: {
+            id: `assigned-${project.id}`,
+            status: "selected",
+            match_reason: "You are assigned to this booking.",
+            response_note: null,
+            availability_note: null,
+            created_at: project.created_at,
+            viewed_at: null,
+            responded_at: null,
+        },
+        project,
+        error: null,
+    };
+}
+
 function mapOpportunity(invite: Record<string, unknown>, project: Record<string, unknown>): CreatorOpportunity {
     return {
         invite_id: String(invite.id),
@@ -172,7 +206,16 @@ export async function getOpportunityDetail(projectId: string): Promise<{ success
 
     const { invite, project, error } = await getInviteForCreator(projectId, auth.creatorId);
     if (error || !invite || !project) {
-        return { success: false, message: error || "Opportunity not found." };
+        const fallback = await getAssignedProjectForCreator(projectId, auth.creatorId);
+        if (!fallback.invite || !fallback.project) {
+            return { success: false, message: error || fallback.error || "Opportunity not found." };
+        }
+
+        return {
+            success: true,
+            message: "Project loaded.",
+            opportunity: mapOpportunity(fallback.invite, fallback.project),
+        };
     }
 
     return {
@@ -190,6 +233,11 @@ export async function markOpportunityViewed(projectId: string): Promise<ActionRe
 
     const { admin, invite, error } = await getInviteForCreator(projectId, auth.creatorId);
     if (error || !invite) {
+        const fallback = await getAssignedProjectForCreator(projectId, auth.creatorId);
+        if (fallback.project) {
+            return { success: true, message: "Assigned project loaded." };
+        }
+
         return { success: false, message: error || "Opportunity not found." };
     }
 

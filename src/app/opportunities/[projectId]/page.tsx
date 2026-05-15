@@ -124,7 +124,8 @@ export default async function OpportunityDetailPage({ params, searchParams }: Pr
                 <ProjectTimeline
                     projectId={opportunity.project_id}
                     projectStatus={opportunity.project_status}
-                    canAdd={["selected"].includes(opportunity.invite_status) || ["confirmed", "in_progress", "delivered"].includes(opportunity.project_status)}
+                    canAdd={opportunity.invite_status === "selected"}
+                    emptyMessage="No timeline updates yet. Add the first milestone when work starts."
                 />
             </div>
         </main>
