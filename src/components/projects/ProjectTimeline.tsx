@@ -136,7 +136,7 @@ export function ProjectTimeline({
                                         {update.status.replace(/_/g, " ")}
                                     </span>
                                 </div>
-                                {update.message && <p className="text-sm text-stone-600 mt-1 whitespace-pre-wrap">{update.message}</p>}
+                                {update.message && <TimelineMessage message={update.message} />}
                                 <div className="text-xs text-stone-400 mt-2">
                                     {update.author_name || "Project participant"} · {new Date(update.created_at).toLocaleString()}
                                 </div>
@@ -146,5 +146,29 @@ export function ProjectTimeline({
                 </div>
             )}
         </section>
+    );
+}
+
+function TimelineMessage({ message }: { message: string }) {
+    const lines = message.split("\n");
+
+    return (
+        <div className="text-sm text-stone-600 mt-1 whitespace-pre-wrap">
+            {lines.map((line, index) => {
+                const proofMatch = line.match(/^Proof file:\s*(https?:\/\/\S+)/i);
+                if (proofMatch) {
+                    return (
+                        <div key={`${line}-${index}`}>
+                            Proof file:{" "}
+                            <a href={proofMatch[1]} target="_blank" rel="noreferrer" className="font-bold text-orange-700 hover:text-orange-800">
+                                View uploaded proof
+                            </a>
+                        </div>
+                    );
+                }
+
+                return <div key={`${line}-${index}`}>{line || " "}</div>;
+            })}
+        </div>
     );
 }

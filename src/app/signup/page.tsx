@@ -28,6 +28,7 @@ export default function SignupPage() {
     });
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
+    const [signupComplete, setSignupComplete] = useState(false);
     
     // UI state
     const [showPassword, setShowPassword] = useState(false);
@@ -119,9 +120,17 @@ export default function SignupPage() {
             data.append("travel_enabled", String(creatorForm.travelEnabled));
             data.append("budget_flexibility", String(creatorForm.budgetFlexibility));
 
-            await signup(data, accountType || "client", creatorType || undefined);
-        } catch {
-            setErrorMsg("Failed to create account. Please try again.");
+            const result = await signup(data, accountType || "client", creatorType || undefined);
+            if (!result.success) {
+                setErrorMsg(result.message);
+                setLoading(false);
+                return;
+            }
+
+            setSignupComplete(true);
+            setLoading(false);
+        } catch (error) {
+            setErrorMsg(error instanceof Error ? error.message : "Failed to create account. Please try again.");
             setLoading(false);
         }
     };
@@ -141,8 +150,37 @@ export default function SignupPage() {
                 </div>
 
                 <AnimatePresence mode="wait">
+                    {signupComplete && (
+                        <motion.div
+                            key="signup-complete"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            className="bg-white p-8 md:p-10 rounded-[2rem] shadow-2xl shadow-stone-200/50 border border-stone-100 text-center"
+                        >
+                            <div className="w-14 h-14 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center mx-auto mb-5">
+                                <Mail className="w-7 h-7" />
+                            </div>
+                            <h1 className="text-3xl font-black tracking-tight text-stone-900 mb-3 font-display">
+                                Check your email
+                            </h1>
+                            <p className="text-stone-600 font-medium leading-relaxed">
+                                Account created. Please check your email and verify your account before logging in.
+                            </p>
+                            <p className="text-sm text-stone-500 mt-3">
+                                Didn&apos;t receive email? Check spam or try again from the login page.
+                            </p>
+                            <Link
+                                href="/login"
+                                className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-stone-900 px-6 py-3 text-sm font-bold text-white hover:bg-stone-800 transition-colors"
+                            >
+                                Go to Login <ArrowRight className="w-4 h-4" />
+                            </Link>
+                        </motion.div>
+                    )}
+
                     {/* STEP 1: Account Type Selection */}
-                    {step === 1 && (
+                    {!signupComplete && step === 1 && (
                         <motion.div
                             key="step1"
                             initial={{ opacity: 0, scale: 0.95 }}
@@ -197,7 +235,7 @@ export default function SignupPage() {
                     )}
 
                     {/* STEP 2: Creator Sub-Type Selection */}
-                    {step === 2 && (
+                    {!signupComplete && step === 2 && (
                         <motion.div
                             key="step2-subtype"
                             initial={{ opacity: 0, x: 20 }}
@@ -245,7 +283,7 @@ export default function SignupPage() {
                     )}
 
                     {/* STEP 3: Credentials Form */}
-                    {step === 3 && (
+                    {!signupComplete && step === 3 && (
                         <motion.div
                             key="step3-credentials"
                             initial={{ opacity: 0, x: 20 }}
