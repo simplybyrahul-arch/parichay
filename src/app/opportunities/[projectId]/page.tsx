@@ -3,6 +3,7 @@ import { ArrowLeft, Calendar, MapPin, Wallet, Clock, Tag } from "lucide-react";
 import { getOpportunityDetail, markOpportunityViewed, validateWhatsAppInviteLink } from "@/app/actions/opportunities";
 import { OpportunityResponseForm } from "./OpportunityResponseForm";
 import { ProjectTimeline } from "@/components/projects/ProjectTimeline";
+import { WorkProofUpload } from "./WorkProofUpload";
 
 type Props = {
     params: Promise<{ projectId: string }>;
@@ -26,14 +27,33 @@ export default async function OpportunityDetailPage({ params, searchParams }: Pr
     const { projectId } = await params;
     const query = await searchParams;
     let tokenMessage: string | null = null;
+    let result: Awaited<ReturnType<typeof getOpportunityDetail>>;
 
     if (query.ref === "whatsapp") {
-        const tokenResult = await validateWhatsAppInviteLink(projectId, query.creator_id || null, query.token || null);
-        tokenMessage = tokenResult.message;
+        try {
+            const tokenResult = await validateWhatsAppInviteLink(projectId, query.creator_id || null, query.token || null);
+            tokenMessage = tokenResult.message;
+        } catch (error) {
+            console.error("WhatsApp opportunity token validation error:", error);
+            tokenMessage = "Invite tracking could not be updated, but you can still view the booking if you have access.";
+        }
     }
 
-    await markOpportunityViewed(projectId);
-    const result = await getOpportunityDetail(projectId);
+    try {
+        await markOpportunityViewed(projectId);
+    } catch (error) {
+        console.error("Opportunity viewed tracking error:", error);
+    }
+
+    try {
+        result = await getOpportunityDetail(projectId);
+    } catch (error) {
+        console.error("Opportunity detail load error:", error);
+        result = {
+            success: false,
+            message: "Project details could not be loaded right now. Please try again or contact support if this continues.",
+        };
+    }
 
     if (!result.success || !result.opportunity) {
         return (
@@ -54,6 +74,7 @@ export default async function OpportunityDetailPage({ params, searchParams }: Pr
 
     const opportunity = result.opportunity;
     const isExpired = opportunity.project_status === "expired";
+    const isAssigned = opportunity.invite_status === "selected";
     const responsesClosed = !["sent", "viewed"].includes(opportunity.invite_status)
         || ["confirmed", "in_progress", "delivered", "completed", "cancelled", "expired", "disputed"].includes(opportunity.project_status);
 
@@ -121,10 +142,16 @@ export default async function OpportunityDetailPage({ params, searchParams }: Pr
 
                 <OpportunityResponseForm opportunity={opportunity} />
 
+                <WorkProofUpload
+                    projectId={opportunity.project_id}
+                    projectStatus={opportunity.project_status}
+                    canUpload={isAssigned}
+                />
+
                 <ProjectTimeline
                     projectId={opportunity.project_id}
                     projectStatus={opportunity.project_status}
-                    canAdd={opportunity.invite_status === "selected"}
+                    canAdd={isAssigned}
                     emptyMessage="No timeline updates yet. Add the first milestone when work starts."
                 />
             </div>

@@ -10,6 +10,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         redirect("/login");
     }
 
+    if (!user.email_confirmed_at && !user.confirmed_at) {
+        await supabase.auth.signOut();
+        redirect("/login?error=Please verify your email before logging in.");
+    }
+
     const { data: profile } = await supabase
         .from("users")
         .select("account_type")

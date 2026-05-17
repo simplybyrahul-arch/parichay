@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ArrowRight, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { login } from "../actions/auth";
+import { login, resendVerificationEmail } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export default function LoginPage() {
@@ -12,12 +12,23 @@ export default function LoginPage() {
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [errorMsg, setErrorMsg] = useState("");
+    const [resending, setResending] = useState(false);
+    const [errorMsg, setErrorMsg] = useState(() => {
+        if (typeof window === "undefined") return "";
+        return new URLSearchParams(window.location.search).get("error") || "";
+    });
+    const [successMsg, setSuccessMsg] = useState(() => {
+        if (typeof window === "undefined") return "";
+        return new URLSearchParams(window.location.search).get("verified") === "1"
+            ? "Email verified successfully. You can now login."
+            : "";
+    });
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setErrorMsg("");
+        setSuccessMsg("");
 
         // 1. Validate Email
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -39,10 +50,37 @@ export default function LoginPage() {
             data.append("email", email);
             data.append("password", password);
 
-            await login(data);
-        } catch {
-            setErrorMsg("Invalid email or password. Please try again.");
+            const result = await login(data);
+            if (result && !result.success) {
+                setErrorMsg(result.message);
+                setLoading(false);
+            }
+        } catch (error) {
+            setErrorMsg(error instanceof Error ? error.message : "Invalid email or password. Please try again.");
             setLoading(false);
+        }
+    };
+
+    const handleResendVerification = async () => {
+        setErrorMsg("");
+        setSuccessMsg("");
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            setErrorMsg("Enter your email address above before resending verification.");
+            return;
+        }
+
+        setResending(true);
+        const data = new FormData();
+        data.append("email", email);
+        const result = await resendVerificationEmail(data);
+        setResending(false);
+
+        if (result.success) {
+            setSuccessMsg(result.message);
+        } else {
+            setErrorMsg(result.message);
         }
     };
 
@@ -71,6 +109,12 @@ export default function LoginPage() {
                 {errorMsg && (
                     <div className="mb-6 p-4 bg-red-50 text-red-600 text-sm rounded-xl font-medium border border-red-100">
                         {errorMsg}
+                    </div>
+                )}
+
+                {successMsg && (
+                    <div className="mb-6 p-4 bg-green-50 text-green-700 text-sm rounded-xl font-medium border border-green-100">
+                        {successMsg}
                     </div>
                 )}
 
@@ -126,6 +170,18 @@ export default function LoginPage() {
                         )}
                     </button>
                 </form>
+
+                <div className="mt-5 rounded-2xl border border-stone-100 bg-stone-50 p-4 text-center">
+                    <p className="text-xs text-stone-500 mb-3">Need another verification email?</p>
+                    <button
+                        type="button"
+                        onClick={handleResendVerification}
+                        disabled={resending}
+                        className="text-sm font-bold text-orange-600 hover:text-orange-700 disabled:opacity-60"
+                    >
+                        {resending ? "Sending..." : "Resend verification email"}
+                    </button>
+                </div>
 
                 <div className="mt-8 text-center">
                     <p className="text-stone-500 text-sm font-medium">

@@ -62,14 +62,31 @@ export async function updateSession(request: NextRequest) {
     const isDashboardPath = request.nextUrl.pathname.startsWith('/dashboard')
     const isCreatorDashboardPath = request.nextUrl.pathname.startsWith('/creator-dashboard')
     const isAdminPath = request.nextUrl.pathname.startsWith('/admin')
+    const isBookPath = request.nextUrl.pathname.startsWith('/book')
+    const isOpportunityPath = request.nextUrl.pathname.startsWith('/opportunities')
+    const isProtectedPath = isDashboardPath || isCreatorDashboardPath || isAdminPath || isBookPath || isOpportunityPath
 
-    if (!user && (isDashboardPath || isCreatorDashboardPath || isAdminPath)) {
+    if (!user && isProtectedPath) {
         const url = request.nextUrl.clone()
         url.pathname = '/login'
         return NextResponse.redirect(url)
     }
 
     const isAuthPath = request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup'
+    const isEmailConfirmed = Boolean(user?.email_confirmed_at || user?.confirmed_at)
+
+    if (user && !isEmailConfirmed && (isProtectedPath || isAuthPath)) {
+        await supabase.auth.signOut()
+
+        if (isProtectedPath) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/login'
+            url.searchParams.set('error', 'Please verify your email before logging in.')
+            return NextResponse.redirect(url)
+        }
+
+        return supabaseResponse
+    }
 
     if (user && (isAuthPath || isDashboardPath || isCreatorDashboardPath || isAdminPath)) {
         // Fetch real-time account_type directly from the database to bypass stale JWT metadata issues
