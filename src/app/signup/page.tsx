@@ -7,6 +7,7 @@ import Link from "next/link";
 import { signup } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
 import { creatorServiceOptions } from "@/lib/creators/services";
+import { validatePasswordStrength } from "@/utils/auth-security";
 
 export default function SignupPage() {
     const [accountType, setAccountType] = useState<"client" | "creator" | null>(null);
@@ -56,9 +57,9 @@ export default function SignupPage() {
             return;
         }
 
-        // 2. Validate Password Length
-        if (formData.password.length < 8) {
-            setErrorMsg("Password must be at least 8 characters long.");
+        const passwordError = validatePasswordStrength(formData.password);
+        if (passwordError) {
+            setErrorMsg(passwordError);
             setLoading(false);
             return;
         }
@@ -456,9 +457,9 @@ export default function SignupPage() {
                                             type={showPassword ? "text" : "password"}
                                             value={formData.password}
                                             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                            placeholder="Min. 8 characters"
+                                            placeholder="Min. 10 chars, uppercase, lowercase, number"
                                             required
-                                            minLength={8}
+                                            minLength={10}
                                             className="w-full pl-12 pr-12 py-4 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
                                         />
                                         <button
@@ -481,7 +482,7 @@ export default function SignupPage() {
                                             onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                                             placeholder="Re-enter password"
                                             required
-                                            minLength={8}
+                                            minLength={10}
                                             className="w-full pl-12 pr-12 py-4 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
                                         />
                                         <button
