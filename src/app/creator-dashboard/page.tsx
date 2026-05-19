@@ -30,7 +30,10 @@ import { logout } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
 import { listCreatorOpportunities, respondToOpportunity, type CreatorOpportunity } from "../actions/opportunities";
 import { startAssignedProject } from "../actions/creatorProjects";
+import { listMyNotifications, markNotificationRead, type UserNotification } from "../actions/notifications";
 import { commaList, creatorServiceOptions, parseCommaList } from "@/lib/creators/services";
+import { formatPaymentStatus } from "@/lib/projects/statusLabels";
+import { RoleSettingsPanel } from "@/components/settings/RoleSettingsPanel";
 
 const closedProjectStatuses = new Set(["expired", "cancelled", "completed", "disputed"]);
 
@@ -88,10 +91,12 @@ export default function CreatorDashboard() {
                 description, 
                 budget, 
                 status, 
+                payment_status,
+                selected_creator_id,
                 created_at,
                 users!client_id(full_name)
             `)
-            .eq('creator_id', userId)
+            .or(`creator_id.eq.${userId},selected_creator_id.eq.${userId}`)
             .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -109,8 +114,10 @@ export default function CreatorDashboard() {
                     type: req.title,
                     role: req.description,
                     date: new Date(req.created_at).toLocaleDateString(),
-                    budget: `₹${req.budget.toLocaleString()}`,
+                    budget: `Rs ${Number(req.budget || 0).toLocaleString()}`,
                     status: req.status === 'pending' ? 'New Request' : req.status,
+                    paymentStatus: req.payment_status,
+                    selectedCreatorId: req.selected_creator_id,
                     timeAgo: getRelativeTime(req.created_at)
                 };
             });
@@ -184,6 +191,10 @@ export default function CreatorDashboard() {
     const { data: opportunities = [], isValidating: opportunitiesLoading, mutate: mutateOpportunities } = useSWR(
         userId ? ['creator-opportunities', userId] : null,
         fetchOpportunities
+    );
+    const { data: notifications = [], mutate: mutateNotifications } = useSWR<UserNotification[]>(
+        userId ? ['creator-notifications', userId] : null,
+        () => listMyNotifications()
     );
 
     const { data: profile } = useSWR(
@@ -392,6 +403,7 @@ export default function CreatorDashboard() {
 
     const profileCompletionTotal = 7;
     const profileCompletionPercent = Math.round(((profileCompletionTotal - missingProfileFields.length) / profileCompletionTotal) * 100);
+    const unreadNotificationCount = notifications.filter((notification) => !notification.read).length;
 
     const renderSidebarContent = () => (
         <>
@@ -538,7 +550,9 @@ export default function CreatorDashboard() {
                             className="w-10 h-10 rounded-full bg-stone-50 border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-100 transition-colors relative"
                         >
                             <Bell className="w-5 h-5" />
-                            <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
+                            {unreadNotificationCount > 0 && (
+                                <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
+                            )}
                         </button>
                         <button onClick={() => router.push(`/creators/${userId}`)} className="px-5 py-2 hidden sm:flex bg-stone-900 text-white text-sm font-bold rounded-full hover:bg-stone-800 transition-colors items-center gap-2">
                             View Public Profile
@@ -654,21 +668,26 @@ export default function CreatorDashboard() {
                                                             <Wallet className="w-4 h-4 text-stone-400 mt-0.5" />
                                                             <div>
                                                                 <div className="text-sm font-bold text-stone-900">{req.budget}</div>
-                                                                <div className="text-xs text-stone-500">Estimated Total (Before Fees)</div>
+                                                                <div className="text-xs text-stone-500">{formatPaymentStatus(req.paymentStatus, req.status, req.selectedCreatorId)}</div>
                                                             </div>
                                                         </div>
                                                     </div>
 
                                                     <div className="flex gap-3 pt-4 border-t border-stone-100">
-                                                        <button className="flex-1 py-2.5 bg-stone-50 text-stone-700 font-bold rounded-xl hover:bg-stone-100 transition-colors text-sm">
-                                                            Decline
-                                                        </button>
                                                         <button
-                                                            onClick={() => handleAcceptRequest(req.id)}
-                                                            className="flex-1 py-2.5 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors text-sm"
+                                                            onClick={() => router.push(`/opportunities/${req.id}`)}
+                                                            className="flex-1 py-2.5 bg-white border border-stone-200 text-stone-700 font-bold rounded-xl hover:bg-stone-50 transition-colors text-sm"
                                                         >
-                                                            Accept Brief
+                                                            View Details
                                                         </button>
+                                                        {["funded", "confirmed"].includes(req.status) && (
+                                                            <button
+                                                                onClick={() => handleAcceptRequest(req.id)}
+                                                                className="flex-1 py-2.5 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors text-sm"
+                                                            >
+                                                                Start Work
+                                                            </button>
+                                                        )}
                                                     </div>
 
                                                 </div>
@@ -961,11 +980,40 @@ export default function CreatorDashboard() {
                                     onView={(projectId) => router.push(`/opportunities/${projectId}`)}
                                     onRespond={handleOpportunityResponse}
                                 />
-                                <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
-                                    <Inbox className="w-16 h-16 text-rose-200 mb-4" />
-                                    <h2 className="text-2xl font-bold text-stone-900 mb-2">Assigned Booking Requests</h2>
-                                    <p className="text-stone-500 max-w-md">Assigned projects still appear in the existing dashboard sections. New broadcast bookings now appear above for your response.</p>
-                                </div>
+                                <section>
+                                    <h2 className="text-xl font-bold text-stone-900 font-display mb-4">Assigned Booking Requests</h2>
+                                    {loading ? (
+                                        <div className="text-center py-12 bg-white rounded-2xl border border-stone-100">
+                                            <div className="w-8 h-8 rounded-full border-4 border-rose-200 border-t-rose-600 animate-spin mx-auto mb-4"></div>
+                                            <p className="text-stone-500 font-medium">Loading assigned bookings...</p>
+                                        </div>
+                                    ) : requests.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
+                                            <Inbox className="w-16 h-16 text-rose-200 mb-4" />
+                                            <h3 className="text-xl font-bold text-stone-900 mb-2">No assigned bookings yet</h3>
+                                            <p className="text-stone-500 max-w-md">When a client selects you for a booking, it will appear here with project details and milestone updates.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-white rounded-2xl border border-stone-100 shadow-sm divide-y divide-stone-100 overflow-hidden">
+                                            {requests.map((req) => (
+                                                <div key={req.id} className="p-5 flex flex-col md:flex-row md:items-center gap-4">
+                                                    <div className="flex-1 min-w-0">
+                                                        <h3 className="font-bold text-stone-900 truncate">{req.type}</h3>
+                                                        <p className="text-xs text-stone-500 mt-1 line-clamp-1">{req.role || "No description"}</p>
+                                                    </div>
+                                                    <div className="text-sm font-bold text-stone-700 capitalize">{req.status.replace(/_/g, " ")}</div>
+                                                    <div className="text-sm text-stone-500">{formatPaymentStatus(req.paymentStatus, req.status, req.selectedCreatorId)}</div>
+                                                    <button
+                                                        onClick={() => router.push(`/opportunities/${req.id}`)}
+                                                        className="px-4 py-2 rounded-xl border border-stone-200 text-sm font-bold text-stone-700 hover:bg-stone-50"
+                                                    >
+                                                        View Details
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </section>
                             </div>
                         )}
 
@@ -994,18 +1042,52 @@ export default function CreatorDashboard() {
                         )}
 
                         {activeTab === "settings" && (
-                            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
-                                <Settings className="w-16 h-16 text-rose-200 mb-4" />
-                                <h2 className="text-2xl font-bold text-stone-900 mb-2">Account Settings</h2>
-                                <p className="text-stone-500 max-w-md">Update your password, manage notification preferences, and configure payment gateways logic here.</p>
+                            <div className="space-y-6">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-stone-900 mb-2">Creator Settings</h2>
+                                    <p className="text-stone-500">Manage your creator profile, availability, services, and notifications.</p>
+                                </div>
+                                <RoleSettingsPanel role="creator" />
                             </div>
                         )}
 
                         {activeTab === "notifications" && (
-                            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
-                                <Bell className="w-16 h-16 text-rose-200 mb-4" />
-                                <h2 className="text-2xl font-bold text-stone-900 mb-2">Notifications</h2>
-                                <p className="text-stone-500 max-w-md">You have 1 unread message and 2 new booking requests.</p>
+                            <div className="space-y-4">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-stone-900 mb-2">Notifications</h2>
+                                    <p className="text-stone-500">Booking opportunities, selections, payment, and timeline updates.</p>
+                                </div>
+                                {notifications.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
+                                        <Bell className="w-16 h-16 text-rose-200 mb-4" />
+                                        <p className="text-stone-500 max-w-md">You have no notifications yet.</p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-2xl border border-stone-100 shadow-sm divide-y divide-stone-100 overflow-hidden">
+                                        {notifications.map((notification) => (
+                                            <button
+                                                key={notification.id}
+                                                onClick={async () => {
+                                                    if (!notification.read) {
+                                                        await markNotificationRead(notification.id);
+                                                        await mutateNotifications();
+                                                    }
+                                                    if (notification.cta_url) router.push(notification.cta_url);
+                                                }}
+                                                className={`w-full p-5 text-left transition-colors ${notification.read ? "hover:bg-stone-50" : "bg-rose-50/60 hover:bg-rose-50"}`}
+                                            >
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div>
+                                                        <h3 className="font-bold text-stone-900">{notification.title}</h3>
+                                                        <p className="text-sm text-stone-600 mt-1">{notification.message}</p>
+                                                    </div>
+                                                    {!notification.read && <span className="mt-1 h-2.5 w-2.5 rounded-full bg-rose-600" />}
+                                                </div>
+                                                <div className="text-xs text-stone-400 mt-3">{new Date(notification.created_at).toLocaleString()}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
 

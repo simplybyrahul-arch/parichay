@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit } from '../rate-limit'
+import { secureCookieOptions } from '../auth-security'
 
 export async function updateSession(request: NextRequest) {
     let supabaseResponse = NextResponse.next({
@@ -21,7 +22,7 @@ export async function updateSession(request: NextRequest) {
                         request,
                     })
                     cookiesToSet.forEach(({ name, value, options }) =>
-                        supabaseResponse.cookies.set(name, value, options)
+                        supabaseResponse.cookies.set(name, value, secureCookieOptions(options))
                     )
                 },
             },
@@ -37,13 +38,17 @@ export async function updateSession(request: NextRequest) {
     const ip = request.headers.get('x-real-ip') || request.headers.get('x-forwarded-for') || '127.0.0.1';
     
     // Limit to 40 requests per minute per IP for general endpoints
-    const { success, remaining, reset } = await rateLimit(ip, 40, 60000);
+    const isAuthPost = request.method === 'POST'
+        && ['/login', '/signup', '/forgot-password', '/update-password'].includes(request.nextUrl.pathname)
+    const requestLimit = isAuthPost ? 8 : 40
+    const requestWindowMs = isAuthPost ? 15 * 60 * 1000 : 60000
+    const { success, remaining, reset } = await rateLimit(`${isAuthPost ? 'auth' : 'general'}:${ip}`, requestLimit, requestWindowMs);
     
     if (!success) {
         return new NextResponse("Too Many Requests. Please slow down and try again.", {
             status: 429,
             headers: {
-                'X-RateLimit-Limit': '40',
+                'X-RateLimit-Limit': requestLimit.toString(),
                 'X-RateLimit-Remaining': remaining.toString(),
                 'X-RateLimit-Reset': reset.toString(),
                 'Retry-After': Math.ceil((reset - Date.now()) / 1000).toString()
@@ -121,6 +126,11 @@ export async function updateSession(request: NextRequest) {
             return NextResponse.redirect(url)
         }
     }
+
+    supabaseResponse.headers.set('X-Frame-Options', 'DENY')
+    supabaseResponse.headers.set('X-Content-Type-Options', 'nosniff')
+    supabaseResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+    supabaseResponse.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
 
     return supabaseResponse
 }

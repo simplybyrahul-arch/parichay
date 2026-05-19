@@ -1,21 +1,30 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js'
 import { createClient } from '@/utils/supabase/server'
+import { rateLimit } from '@/utils/rate-limit'
+import {
+    AUTH_RATE_LIMIT_WINDOW_MS,
+    getAuthCallbackUrl,
+    isValidEmail,
+    normalizeEmail,
+    validatePasswordStrength,
+} from '@/utils/auth-security'
 
 type AuthActionResult = {
     success: boolean;
     message: string;
 };
 
-function getAppUrl() {
-    return process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+function getEmailRedirectTo() {
+    return getAuthCallbackUrl('/login?verified=1');
 }
 
-function getEmailRedirectTo() {
-    return `${getAppUrl()}/auth/callback?next=/login?verified=1`;
+function getPasswordResetRedirectTo() {
+    return getAuthCallbackUrl('/update-password');
 }
 
 function isEmailConfirmed(user: { email_confirmed_at?: string | null; confirmed_at?: string | null } | null | undefined) {
@@ -50,18 +59,41 @@ function createSlug(value: string, id: string) {
     return `${base}-${id.slice(0, 8)}`;
 }
 
+async function getClientIp() {
+    const headerStore = await headers();
+    return (headerStore.get('x-real-ip') || headerStore.get('x-forwarded-for') || '127.0.0.1')
+        .split(',')[0]
+        .trim();
+}
+
+async function enforceAuthRateLimit(action: string, email?: string) {
+    const ip = await getClientIp();
+    const key = `${action}:${ip}:${email || 'anonymous'}`;
+    const { success, reset } = await rateLimit(key, 5, AUTH_RATE_LIMIT_WINDOW_MS);
+
+    if (!success) {
+        const retrySeconds = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+        return `Too many attempts. Please try again in ${Math.ceil(retrySeconds / 60)} minute(s).`;
+    }
+
+    return null;
+}
+
 export async function login(formData: FormData): Promise<AuthActionResult | never> {
     const supabase = await createClient()
 
-    const email = formData.get('email') as string
+    const email = normalizeEmail(formData.get('email'))
     const password = formData.get('password') as string
 
-    if (!email || !password || email.length < 5 || password.length < 8) {
+    if (!isValidEmail(email) || !password || password.length < 8) {
         return { success: false, message: 'Invalid input provided.' }
     }
 
+    const rateLimitMessage = await enforceAuthRateLimit('login', email);
+    if (rateLimitMessage) return { success: false, message: rateLimitMessage };
+
     const data = {
-        email: email.trim(),
+        email,
         password: password,
     }
 
@@ -92,7 +124,7 @@ export async function login(formData: FormData): Promise<AuthActionResult | neve
 export async function signup(formData: FormData, accountType: string, creatorType?: string): Promise<AuthActionResult> {
     const supabase = await createClient()
 
-    const email = formData.get('email') as string
+    const email = normalizeEmail(formData.get('email'))
     const password = formData.get('password') as string
     const name = formData.get('name') as string
     const role = String(formData.get('role') || '').trim()
@@ -107,9 +139,15 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
     const budgetFlexibility = toBoolean(formData.get('budget_flexibility'), false)
     const travelEnabled = toBoolean(formData.get('travel_enabled'), false)
 
-    if (!email || !password || !name || password.length < 8) {
+    if (!isValidEmail(email) || !password || !name) {
         return { success: false, message: 'Invalid registration payload provided.' }
     }
+
+    const passwordError = validatePasswordStrength(password);
+    if (passwordError) return { success: false, message: passwordError };
+
+    const rateLimitMessage = await enforceAuthRateLimit('signup', email);
+    if (rateLimitMessage) return { success: false, message: rateLimitMessage };
 
     if (accountType === 'creator') {
         const cleanedPhone = phone.replace(/[^\d+]/g, '')
@@ -119,7 +157,7 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
     }
 
     const data = {
-        email: email.trim(),
+        email,
         password: password,
         options: {
             emailRedirectTo: getEmailRedirectTo(),
@@ -197,18 +235,21 @@ export async function logout() {
 
 export async function requestPasswordReset(formData: FormData) {
     const supabase = await createClient()
-    const email = formData.get('email') as string
+    const email = normalizeEmail(formData.get('email'))
     
-    if (!email) {
+    if (!isValidEmail(email)) {
         return { error: 'Email is required' }
     }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/update-password`,
+    const rateLimitMessage = await enforceAuthRateLimit('password-reset', email);
+    if (rateLimitMessage) return { error: rateLimitMessage };
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: getPasswordResetRedirectTo(),
     })
 
     if (error) {
-        return { error: error.message }
+        console.error('Password reset request error:', error.message)
     }
     
     return { success: true }
@@ -216,11 +257,14 @@ export async function requestPasswordReset(formData: FormData) {
 
 export async function resendVerificationEmail(formData: FormData): Promise<AuthActionResult> {
     const supabase = await createClient()
-    const email = String(formData.get('email') || '').trim()
+    const email = normalizeEmail(formData.get('email'))
 
-    if (!email) {
+    if (!isValidEmail(email)) {
         return { success: false, message: 'Email is required.' }
     }
+
+    const rateLimitMessage = await enforceAuthRateLimit('resend-verification', email);
+    if (rateLimitMessage) return { success: false, message: rateLimitMessage };
 
     const { error } = await supabase.auth.resend({
         type: 'signup',
@@ -235,4 +279,35 @@ export async function resendVerificationEmail(formData: FormData): Promise<AuthA
     }
 
     return { success: true, message: 'Verification email sent. Please check your inbox and spam folder.' }
+}
+
+export async function updatePassword(formData: FormData): Promise<AuthActionResult> {
+    const supabase = await createClient()
+    const password = String(formData.get('password') || '')
+    const confirmPassword = String(formData.get('confirmPassword') || '')
+
+    const rateLimitMessage = await enforceAuthRateLimit('update-password');
+    if (rateLimitMessage) return { success: false, message: rateLimitMessage };
+
+    if (password !== confirmPassword) {
+        return { success: false, message: 'Passwords do not match.' }
+    }
+
+    const passwordError = validatePasswordStrength(password);
+    if (passwordError) return { success: false, message: passwordError };
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+        return { success: false, message: 'Password reset link is invalid or expired. Please request a new link.' }
+    }
+
+    const { error } = await supabase.auth.updateUser({ password })
+    if (error) {
+        console.error('Password update error:', error.message)
+        return { success: false, message: 'Could not update password. Please request a new reset link.' }
+    }
+
+    await supabase.auth.signOut()
+    revalidatePath('/', 'layout')
+    return { success: true, message: 'Password updated. Please sign in with your new password.' }
 }

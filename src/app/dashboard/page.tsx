@@ -17,12 +17,13 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
-import Script from "next/script";
-import { toast } from "sonner";
 import { logout } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
 import { CancelBookingButton } from "@/components/projects/CancelBookingButton";
 import { isClientProjectCancellable } from "@/lib/projects/status";
+import { formatPaymentStatus } from "@/lib/projects/statusLabels";
+import { listMyNotifications, markNotificationRead, type UserNotification } from "../actions/notifications";
+import { RoleSettingsPanel } from "@/components/settings/RoleSettingsPanel";
 
 type Project = {
     id: string;
@@ -33,46 +34,6 @@ type Project = {
     payment_status: string | null;
     selected_creator_id: string | null;
     created_at: string;
-};
-
-type RazorpaySuccessResponse = {
-    razorpay_order_id: string;
-    razorpay_payment_id: string;
-    razorpay_signature: string;
-};
-
-type RazorpayFailureResponse = {
-    error?: {
-        description?: string;
-    };
-};
-
-type RazorpayOptions = {
-    key: string;
-    amount: number;
-    currency: string;
-    name: string;
-    description: string;
-    order_id: string;
-    handler: (response: RazorpaySuccessResponse) => Promise<void>;
-    prefill: {
-        name: string;
-        email: string;
-    };
-    theme: {
-        color: string;
-    };
-};
-
-type RazorpayInstance = {
-    on: (event: 'payment.failed', handler: (response: RazorpayFailureResponse) => void) => void;
-    open: () => void;
-};
-
-type RazorpayConstructor = new (options: RazorpayOptions) => RazorpayInstance;
-
-type WindowWithRazorpay = Window & {
-    Razorpay?: RazorpayConstructor;
 };
 
 export default function Dashboard() {
@@ -101,8 +62,12 @@ export default function Dashboard() {
         userId ? ['projects', userId] : null,
         ([, uid]) => fetcher(uid as string)
     );
+    const { data: notifications = [], mutate: mutateNotifications } = useSWR<UserNotification[]>(
+        userId ? ['client-notifications', userId] : null,
+        () => listMyNotifications()
+    );
 
-    const [isFunding, setIsFunding] = useState<string | null>(null);
+    const unreadNotificationCount = notifications.filter((notification) => !notification.read).length;
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -120,86 +85,6 @@ export default function Dashboard() {
 
     const handleLogout = async () => {
         await logout();
-    };
-
-    const handleFundEscrow = async (project: Project) => {
-        setIsFunding(project.id);
-        const toastId = toast.loading("Initializing secure payment...");
-
-        try {
-            // 1. Create order on the server
-            const orderRes = await fetch('/api/razorpay/order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectId: project.id })
-            });
-
-            const orderData = await orderRes.json();
-
-            if (!orderRes.ok) {
-                throw new Error(orderData.error || "Failed to create order");
-            }
-
-            // 2. Initialize Razorpay Checkout
-            const options = {
-                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_placeholder",
-                amount: orderData.amount,
-                currency: orderData.currency,
-                name: "ShotcutCrew Creative Payment",
-                description: `Payment for Project: ${project.title}`,
-                order_id: orderData.orderId,
-                handler: async function (response: RazorpaySuccessResponse) {
-                    toast.loading("Verifying payment...", { id: toastId });
-
-                    // 3. Verify Payment
-                    const verifyRes = await fetch('/api/razorpay/verify', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            razorpay_order_id: response.razorpay_order_id,
-                            razorpay_payment_id: response.razorpay_payment_id,
-                            razorpay_signature: response.razorpay_signature,
-                            projectId: project.id
-                        })
-                    });
-
-                    const verifyData = await verifyRes.json();
-
-                    if (verifyRes.ok && verifyData.success) {
-                        toast.success("Payment received. Creator will be notified.", { id: toastId });
-                        mutate(); // refresh data via SWR
-                    } else {
-                        toast.error(verifyData.error || "Verification failed", { id: toastId });
-                    }
-                },
-                prefill: {
-                    name: userEmail?.split('@')[0] || "Client",
-                    email: userEmail || ""
-                },
-                theme: {
-                    color: "#f97316" // Orange-500
-                }
-            };
-
-            const razorpay = (window as WindowWithRazorpay).Razorpay;
-            if (!razorpay) {
-                throw new Error("Payment gateway is not available right now.");
-            }
-            const rzp = new razorpay(options);
-
-            rzp.on('payment.failed', function (response: RazorpayFailureResponse) {
-                toast.error(`Payment Failed: ${response.error?.description || "Unknown"}`, { id: toastId });
-            });
-
-            rzp.open();
-            toast.dismiss(toastId);
-
-        } catch (error: unknown) {
-            console.error("Funding error:", error);
-            toast.error((error as Error).message || "Something went wrong", { id: toastId });
-        } finally {
-            setIsFunding(null);
-        }
     };
 
     const formatProjectDate = (value: string) => {
@@ -288,8 +173,6 @@ export default function Dashboard() {
 
     return (
         <div className="min-h-screen bg-[#fdfbfb] flex flex-col md:flex-row">
-            <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
-
             {/* Sidebar (Desktop) */}
             <aside className="w-64 bg-white border-r border-stone-100 hidden md:flex flex-col h-screen sticky top-0">
                 {renderSidebarContent()}
@@ -345,7 +228,9 @@ export default function Dashboard() {
                             className="w-10 h-10 rounded-full bg-stone-50 border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-100 transition-colors relative"
                         >
                             <Bell className="w-5 h-5" />
-                            <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
+                            {unreadNotificationCount > 0 && (
+                                <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
+                            )}
                         </button>
                         <button suppressHydrationWarning onClick={() => router.push('/book')} className="px-5 py-2 hidden sm:flex bg-orange-600 text-white text-sm font-bold rounded-full hover:bg-orange-700 transition-colors items-center gap-2">
                             New Project
@@ -428,10 +313,10 @@ export default function Dashboard() {
                                                     <div className="flex-1 lg:max-w-xs">
                                                         <div className="flex justify-between text-xs font-medium mb-2 uppercase tracking-wide">
                                                             <span className="text-stone-500">Status</span>
-                                                            <span className={project.status === 'pending' ? 'text-orange-500 font-bold' : 'text-blue-600 font-bold'}>{project.status}</span>
+                                                            <span className="text-blue-600 font-bold">{project.status.replace(/_/g, " ")}</span>
                                                         </div>
                                                         <div className="h-1.5 w-full bg-stone-100 rounded-full overflow-hidden">
-                                                            <div className={`h-full rounded-full ${project.status === 'pending' ? 'bg-orange-400 w-1/4' : 'bg-blue-500 w-1/2'}`} />
+                                                            <div className={`h-full rounded-full ${project.status === 'completed' ? 'bg-green-500 w-full' : project.status === 'confirmed' || project.status === 'in_progress' ? 'bg-blue-500 w-2/3' : 'bg-orange-400 w-1/3'}`} />
                                                         </div>
                                                     </div>
 
@@ -439,20 +324,12 @@ export default function Dashboard() {
                                                     <div className="flex items-center justify-between lg:justify-end gap-6 lg:w-48">
                                                         <div className="text-right flex-1">
                                                             <div className="font-bold text-stone-900">₹{project.budget.toLocaleString()}</div>
-                                                            <div className={`text-[10px] font-bold uppercase tracking-wider ${project.status === 'pending' ? 'text-amber-500' : 'text-green-600'}`}>
-                                                                {project.status === 'pending' ? '○ Unfunded' : '● Funded'}
+                                                            <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                                                                {formatPaymentStatus(project.payment_status, project.status, project.selected_creator_id)}
                                                             </div>
                                                         </div>
                                                         {isClientProjectCancellable(project.status, project.payment_status, project.selected_creator_id) ? (
                                                             <CancelBookingButton projectId={project.id} onCancelled={async () => { await mutate(); }} compact />
-                                                        ) : project.status === 'pending' ? (
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleFundEscrow(project); }}
-                                                                disabled={isFunding === project.id}
-                                                                className="px-4 py-2 bg-orange-600 text-white text-xs font-bold rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50"
-                                                            >
-                                                                {isFunding === project.id ? "Securing..." : "Pay Now"}
-                                                            </button>
                                                         ) : (
                                                             <ChevronRightIcon className="w-5 h-5 text-stone-400 group-hover:text-orange-500 transition-colors" />
                                                         )}
@@ -466,10 +343,42 @@ export default function Dashboard() {
                         )}
 
                         {activeTab === "projects" && (
-                            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
-                                <Briefcase className="w-16 h-16 text-orange-200 mb-4" />
-                                <h2 className="text-2xl font-bold text-stone-900 mb-2">All Projects</h2>
-                                <p className="text-stone-500 max-w-md">Browse through your entire history of creative projects, active bookings, and draft scopes.</p>
+                            <div className="space-y-4">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-stone-900 mb-2">All Projects</h2>
+                                    <p className="text-stone-500">Browse active bookings, pending selections, completed projects, and cancelled requests.</p>
+                                </div>
+
+                                {loading ? (
+                                    <div className="text-center py-12 bg-white rounded-2xl border border-stone-100">
+                                        <div className="w-8 h-8 rounded-full border-4 border-orange-200 border-t-orange-600 animate-spin mx-auto mb-4"></div>
+                                        <p className="text-stone-500 font-medium">Loading your projects...</p>
+                                    </div>
+                                ) : projects.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
+                                        <Briefcase className="w-16 h-16 text-orange-200 mb-4" />
+                                        <h3 className="text-xl font-bold text-stone-900 mb-2">No projects yet</h3>
+                                        <p className="text-stone-500 max-w-md">Create your first booking request to start receiving creator interest.</p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-2xl border border-stone-100 shadow-sm divide-y divide-stone-100 overflow-hidden">
+                                        {projects.map((project) => (
+                                            <button
+                                                key={project.id}
+                                                onClick={() => router.push(`/dashboard/${project.id}`)}
+                                                className="w-full p-5 text-left hover:bg-orange-50/40 transition-colors flex flex-col md:flex-row md:items-center gap-4"
+                                            >
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="font-bold text-stone-900 truncate">{project.title}</h3>
+                                                    <p className="text-xs text-stone-500 mt-1 line-clamp-1">{project.description || "No description"}</p>
+                                                </div>
+                                                <div className="text-sm font-bold text-stone-700 capitalize">{project.status.replace(/_/g, " ")}</div>
+                                                <div className="text-sm text-stone-500">{formatPaymentStatus(project.payment_status, project.status, project.selected_creator_id)}</div>
+                                                <div className="text-sm font-bold text-stone-900">Rs {project.budget.toLocaleString()}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -490,18 +399,52 @@ export default function Dashboard() {
                         )}
 
                         {activeTab === "settings" && (
-                            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
-                                <Settings className="w-16 h-16 text-orange-200 mb-4" />
-                                <h2 className="text-2xl font-bold text-stone-900 mb-2">Account Settings</h2>
-                                <p className="text-stone-500 max-w-md">Update your password, manage notification preferences, and configure your company profile.</p>
+                            <div className="space-y-6">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-stone-900 mb-2">Account Settings</h2>
+                                    <p className="text-stone-500">Manage your profile, notifications, and security preferences.</p>
+                                </div>
+                                <RoleSettingsPanel role="client" />
                             </div>
                         )}
 
                         {activeTab === "notifications" && (
-                            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
-                                <Bell className="w-16 h-16 text-orange-200 mb-4" />
-                                <h2 className="text-2xl font-bold text-stone-900 mb-2">Notifications</h2>
-                                <p className="text-stone-500 max-w-md">You have no new notifications.</p>
+                            <div className="space-y-4">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-stone-900 mb-2">Notifications</h2>
+                                    <p className="text-stone-500">Booking, payment, selection, and coordinator updates.</p>
+                                </div>
+                                {notifications.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-stone-100 shadow-sm text-center">
+                                        <Bell className="w-16 h-16 text-orange-200 mb-4" />
+                                        <p className="text-stone-500 max-w-md">You have no notifications yet.</p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-2xl border border-stone-100 shadow-sm divide-y divide-stone-100 overflow-hidden">
+                                        {notifications.map((notification) => (
+                                            <button
+                                                key={notification.id}
+                                                onClick={async () => {
+                                                    if (!notification.read) {
+                                                        await markNotificationRead(notification.id);
+                                                        await mutateNotifications();
+                                                    }
+                                                    if (notification.cta_url) router.push(notification.cta_url);
+                                                }}
+                                                className={`w-full p-5 text-left transition-colors ${notification.read ? "hover:bg-stone-50" : "bg-orange-50/60 hover:bg-orange-50"}`}
+                                            >
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div>
+                                                        <h3 className="font-bold text-stone-900">{notification.title}</h3>
+                                                        <p className="text-sm text-stone-600 mt-1">{notification.message}</p>
+                                                    </div>
+                                                    {!notification.read && <span className="mt-1 h-2.5 w-2.5 rounded-full bg-orange-600" />}
+                                                </div>
+                                                <div className="text-xs text-stone-400 mt-3">{new Date(notification.created_at).toLocaleString()}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
 
