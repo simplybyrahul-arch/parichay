@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import useSWR from "swr";
 import {
     LayoutDashboard,
@@ -34,8 +34,12 @@ import { listMyNotifications, markNotificationRead, type UserNotification } from
 import { commaList, creatorServiceOptions, parseCommaList } from "@/lib/creators/services";
 import { formatPaymentStatus } from "@/lib/projects/statusLabels";
 import { RoleSettingsPanel } from "@/components/settings/RoleSettingsPanel";
+import { deletePortfolioItem, listMyPortfolioItems, updatePortfolioItem, uploadPortfolioMedia, type PortfolioItem } from "../actions/portfolio";
 
 const closedProjectStatuses = new Set(["expired", "cancelled", "completed", "disputed"]);
+const acceptedPortfolioTypes = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime", "video/webm"]);
+const maxPortfolioImageSize = 10 * 1024 * 1024;
+const maxPortfolioVideoSize = 100 * 1024 * 1024;
 
 function formatCurrency(value: number | null) {
     if (!value) return "Budget not specified";
@@ -180,7 +184,10 @@ export default function CreatorDashboard() {
     const [availableForBooking, setAvailableForBooking] = useState(true);
     const [budgetFlexibility, setBudgetFlexibility] = useState(false);
     const [whatsappOptIn, setWhatsappOptIn] = useState(true);
-    const [portfolioItems, setPortfolioItems] = useState<{id: string, url: string}[]>([]);
+    const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
+    const [uploadStatus, setUploadStatus] = useState("");
+    const [uploadingPortfolio, setUploadingPortfolio] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     // SWR Hooks
     const { data: requests = [], isValidating: loading, mutate: mutateRequests } = useSWR(
@@ -195,6 +202,13 @@ export default function CreatorDashboard() {
     const { data: notifications = [], mutate: mutateNotifications } = useSWR<UserNotification[]>(
         userId ? ['creator-notifications', userId] : null,
         () => listMyNotifications()
+    );
+    const { mutate: mutatePortfolioItems } = useSWR<PortfolioItem[]>(
+        userId ? ['creator-portfolio-items', userId] : null,
+        () => listMyPortfolioItems(),
+        {
+            onSuccess: (items) => setPortfolioItems(items),
+        }
     );
 
     const { data: profile } = useSWR(
@@ -220,16 +234,13 @@ export default function CreatorDashboard() {
                 setBudgetFlexibility(Boolean(data.budget_flexibility));
                 setWhatsappOptIn(data.whatsapp_opt_in !== false);
                 let parsedLink = data.portfolio_url || "";
-                let parsedItems = [];
                 try {
                     const parsed = JSON.parse(data.portfolio_url || "{}");
                     if (parsed.link !== undefined) {
                         parsedLink = parsed.link;
-                        parsedItems = parsed.items || [];
                     }
                 } catch {}
                 setPortfolioUrl(parsedLink);
-                setPortfolioItems(parsedItems);
             }
         }
     );
@@ -324,25 +335,16 @@ export default function CreatorDashboard() {
                 toast.error("Location / Address is required for Studio profiles.");
                 return;
             }
-            if (!portfolioUrl.trim()) {
-                toast.error("Portfolio URL is required for Studio profiles.");
-                return;
-            }
-        } else if (creatorType === 'freelancer') {
-            if (!portfolioUrl.trim()) {
-                toast.error("Portfolio URL is required for Freelancer profiles.");
-                return;
-            }
         }
 
         const updatePromise = new Promise(async (resolve, reject) => {
-            // Check if profile exists
-            const { data: existing } = await supabase.from('creators').select('id').eq('id', userId).single();
-
             const numDayRate = typeof dayRate === 'string' ? parseInt(dayRate) || 0 : dayRate;
             const numCapacity = typeof capacityPerDay === 'string' ? parseInt(capacityPerDay) || null : capacityPerDay || null;
             const numRadius = typeof serviceRadiusKm === 'string' ? parseInt(serviceRadiusKm) || 0 : serviceRadiusKm || 0;
+            const generatedSlug = (userEmail || `creator-${userId}`).split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + userId.slice(0, 8);
             const profilePayload = {
+                id: userId,
+                slug: generatedSlug,
                 role,
                 bio,
                 location: location || city,
@@ -364,38 +366,103 @@ export default function CreatorDashboard() {
                 creator_type: creatorType,
             };
 
-            if (existing) {
-                const { error } = await supabase.from('creators').update({
-                    ...profilePayload,
-                }).eq('id', userId);
-
-                if (error) reject(error);
-                else resolve(true);
-            } else {
-                const generatedSlug = (userEmail || `creator-${userId}`).split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Math.floor(Math.random() * 1000);
-                const { error } = await supabase.from('creators').insert({
-                    id: userId,
-                    slug: generatedSlug,
-                    ...profilePayload,
-                });
-
-                if (error) reject(error);
-                else resolve(true);
+            const { error } = await supabase.from('creators').upsert(profilePayload, { onConflict: 'id' });
+            if (error) {
+                console.error("Creator profile save error:", error);
+                reject(error);
+                return;
             }
+
+            resolve(true);
         });
 
         toast.promise(updatePromise, {
             loading: 'Saving profile...',
-            success: 'Profile saved successfully!',
-            error: 'Failed to save profile'
+            success: 'Profile saved successfully',
+            error: (error) => error instanceof Error ? error.message : 'Failed to save profile'
         });
     }
+
+    const validatePortfolioFile = (file: File) => {
+        if (!acceptedPortfolioTypes.has(file.type)) {
+            return "Supported files: jpg, jpeg, png, webp, mp4, mov, webm.";
+        }
+
+        if (file.type.startsWith("image/") && file.size > maxPortfolioImageSize) {
+            return `${file.name} is larger than 10MB.`;
+        }
+
+        if (file.type.startsWith("video/") && file.size > maxPortfolioVideoSize) {
+            return `${file.name} is larger than 100MB.`;
+        }
+
+        return null;
+    };
+
+    const handlePortfolioUpload = async (files: FileList | null) => {
+        if (!files?.length) return;
+        setUploadingPortfolio(true);
+
+        const selectedFiles = Array.from(files);
+        for (let index = 0; index < selectedFiles.length; index += 1) {
+            const file = selectedFiles[index];
+            const validationError = validatePortfolioFile(file);
+            if (validationError) {
+                toast.error(validationError);
+                continue;
+            }
+
+            setUploadStatus(`Uploading ${index + 1} of ${selectedFiles.length}: ${file.name}`);
+            const formData = new FormData();
+            formData.append("file", file);
+            const result = await uploadPortfolioMedia(formData);
+
+            if (!result.success || !result.item) {
+                toast.error(result.message);
+                continue;
+            }
+
+            setPortfolioItems((items) => [result.item as PortfolioItem, ...items]);
+        }
+
+        await mutatePortfolioItems();
+        setUploadStatus("");
+        setUploadingPortfolio(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        toast.success("Portfolio media updated.");
+    };
+
+    const handlePortfolioItemUpdate = async (item: PortfolioItem) => {
+        const result = await updatePortfolioItem(item.id, {
+            title: item.title || "",
+            description: item.description || "",
+            is_public: item.is_public,
+        });
+
+        if (!result.success) {
+            toast.error(result.message);
+            return;
+        }
+
+        toast.success(result.message);
+        await mutatePortfolioItems();
+    };
+
+    const handlePortfolioItemDelete = async (itemId: string) => {
+        const result = await deletePortfolioItem(itemId);
+        if (!result.success) {
+            toast.error(result.message);
+            return;
+        }
+
+        setPortfolioItems((items) => items.filter((item) => item.id !== itemId));
+        toast.success(result.message);
+    };
 
     const missingProfileFields = [
         !city.trim() ? "City" : null,
         !role ? "Primary service" : null,
         !dayRate || Number(dayRate) <= 0 ? "Day rate" : null,
-        !portfolioUrl.trim() ? "Portfolio URL" : null,
         !phone.trim() && !whatsappPhone.trim() ? "Phone/WhatsApp" : null,
         !availableForBooking ? "Available for booking" : null,
         !travelEnabled && parseCommaList(serviceCities).length === 0 ? "Service cities or travel enabled" : null,
@@ -827,11 +894,10 @@ export default function CreatorDashboard() {
                                                 </div>
                                             </div>
                                         </section>
-                                        {/* Portfolio URL */}
+                                        {/* External Portfolio Link */}
                                         <div>
                                             <label className="block text-sm font-bold text-stone-700 mb-1">
-                                                Portfolio URL
-                                                {(creatorType === 'studio_owner' || creatorType === 'freelancer') && <span className="text-rose-500 ml-0.5">*</span>}
+                                                External portfolio link (optional)
                                             </label>
                                             <input
                                                 type="url"
@@ -840,9 +906,7 @@ export default function CreatorDashboard() {
                                                 className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400"
                                                 placeholder="https://yourportfolio.com or Behance/Dribbble/Instagram link"
                                             />
-                                            {(creatorType === 'studio_owner' || creatorType === 'freelancer') && (
-                                                <p className="text-xs text-stone-400 mt-1">Required. Add your primary portfolio or social media link.</p>
-                                            )}
+                                            <p className="text-xs text-stone-400 mt-1">Optional. Upload photos and videos below to build your public portfolio grid.</p>
                                         </div>
 
                                         <section className="bg-white p-6 rounded-3xl border border-stone-100 shadow-sm space-y-6">
@@ -907,39 +971,93 @@ export default function CreatorDashboard() {
                                         {/* Portfolio Grid Items */}
                                         <section className="bg-white p-6 rounded-3xl border border-stone-100 shadow-sm space-y-6">
                                             <div className="flex items-center justify-between">
-                                                <h3 className="text-lg font-bold text-stone-900 flex items-center gap-2"><ImageIcon className="w-5 h-5 text-stone-400" /> Portfolio Grid</h3>
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-stone-900 flex items-center gap-2"><ImageIcon className="w-5 h-5 text-stone-400" /> Portfolio Grid</h3>
+                                                    <p className="text-sm text-stone-500 mt-1">Upload photos or videos to showcase your work.</p>
+                                                </div>
+                                                <input
+                                                    ref={fileInputRef}
+                                                    type="file"
+                                                    multiple
+                                                    accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm"
+                                                    className="hidden"
+                                                    onChange={(event) => handlePortfolioUpload(event.target.files)}
+                                                />
                                                 <button
-                                                    onClick={() => toast.info("Opening Media Uploader...")}
-                                                    className="text-sm font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1"
+                                                    type="button"
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    disabled={uploadingPortfolio}
+                                                    className="text-sm font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 disabled:opacity-50"
                                                 >
-                                                    <Plus className="w-4 h-4" /> Upload
+                                                    <Plus className="w-4 h-4" /> {uploadingPortfolio ? "Uploading..." : "Upload Media"}
                                                 </button>
                                             </div>
 
-                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                                {portfolioItems.map((item) => (
-                                                    <div key={item.id} className="aspect-[4/5] rounded-xl overflow-hidden relative group cursor-pointer bg-stone-100">
-                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                        <img src={item.url} alt="Portfolio" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                                                        <div className="absolute inset-0 bg-stone-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <button onClick={() => setPortfolioItems(prev => prev.filter(p => p.id !== item.id))} className="text-white font-bold text-sm hover:text-red-400">Remove</button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                                {/* Add New */}
-                                                <div 
-                                                    onClick={() => {
-                                                        const url = window.prompt("Enter image URL:");
-                                                        if (url) {
-                                                            setPortfolioItems(prev => [...prev, { id: Date.now().toString(), url }]);
-                                                        }
-                                                    }}
-                                                    className="aspect-[4/5] rounded-xl border-2 border-dashed border-stone-200 hover:border-rose-300 hover:bg-rose-50 transition-colors flex flex-col items-center justify-center text-stone-400 group cursor-pointer"
-                                                >
-                                                    <Plus className="w-8 h-8 mb-2 group-hover:text-rose-500" />
-                                                    <span className="text-sm font-medium group-hover:text-rose-600">Add Project URL</span>
+                                            {uploadStatus && (
+                                                <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                                                    {uploadStatus}
                                                 </div>
-                                            </div>
+                                            )}
+
+                                            {portfolioItems.length === 0 ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    className="w-full rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50 px-6 py-12 text-center text-stone-500 hover:border-rose-300 hover:bg-rose-50 transition-colors"
+                                                >
+                                                    <ImageIcon className="w-10 h-10 mx-auto mb-3 text-stone-300" />
+                                                    <span className="font-bold text-stone-700">Upload photos or videos to showcase your work</span>
+                                                    <span className="block text-xs mt-2">Images up to 10MB. Videos up to 100MB.</span>
+                                                </button>
+                                            ) : (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    {portfolioItems.map((item) => (
+                                                        <div key={item.id} className="rounded-2xl border border-stone-100 bg-stone-50 overflow-hidden">
+                                                            <div className="aspect-video bg-stone-100 relative">
+                                                                {item.media_type === "video" ? (
+                                                                    <video src={item.media_url} controls className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                                    <img src={item.media_url} alt={item.title || "Portfolio media"} className="w-full h-full object-cover" />
+                                                                )}
+                                                            </div>
+                                                            <div className="p-4 space-y-3">
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <span className="rounded-full bg-white px-2 py-1 text-xs font-bold uppercase text-stone-500">{item.media_type}</span>
+                                                                    <button type="button" onClick={() => handlePortfolioItemDelete(item.id)} className="text-xs font-bold text-red-600 hover:text-red-700">Delete</button>
+                                                                </div>
+                                                                <input
+                                                                    value={item.title || ""}
+                                                                    onChange={(event) => setPortfolioItems((items) => items.map((current) => current.id === item.id ? { ...current, title: event.target.value } : current))}
+                                                                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500"
+                                                                    placeholder="Title"
+                                                                />
+                                                                <textarea
+                                                                    value={item.description || ""}
+                                                                    onChange={(event) => setPortfolioItems((items) => items.map((current) => current.id === item.id ? { ...current, description: event.target.value } : current))}
+                                                                    rows={2}
+                                                                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 resize-none"
+                                                                    placeholder="Description"
+                                                                />
+                                                                <div className="flex items-center justify-between">
+                                                                    <label className="flex items-center gap-2 text-xs font-semibold text-stone-600">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={item.is_public}
+                                                                            onChange={(event) => setPortfolioItems((items) => items.map((current) => current.id === item.id ? { ...current, is_public: event.target.checked } : current))}
+                                                                            className="accent-rose-600"
+                                                                        />
+                                                                        Public
+                                                                    </label>
+                                                                    <button type="button" onClick={() => handlePortfolioItemUpdate(item)} className="rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white hover:bg-stone-800">
+                                                                        Save Item
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </section>
                                     </div>
 

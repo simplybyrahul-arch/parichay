@@ -9,6 +9,11 @@ export type CreateBookingInput = {
     bookingType: BookingType;
     bookingLocation?: string | null;
     eventDate?: string | null;
+    eventType?: string | null;
+    customEventType?: string | null;
+    crewRequirements?: Record<string, number> | null;
+    equipmentRequirements?: Record<string, number | boolean> | null;
+    postProductionRequirements?: Record<string, number | boolean> | null;
     estimatedDays?: number | null;
     requirementSummary?: string | null;
     budget: number;
@@ -74,10 +79,27 @@ function validateBookingInput(input: CreateBookingInput) {
         throw new Error("Event date is invalid.");
     }
 
+    const cleanCrewRequirements = Object.fromEntries(
+        Object.entries(input.crewRequirements || {})
+            .map(([key, value]) => [key, Math.max(0, Number(value || 0))])
+            .filter(([key, value]) => Boolean(key) && Number(value) > 0)
+    ) as Record<string, number>;
+
+    const cleanRequirementMap = (value?: Record<string, number | boolean> | null) => {
+        return Object.fromEntries(
+            Object.entries(value || {}).filter(([key, selected]) => Boolean(key) && (selected === true || Number(selected) > 0))
+        ) as Record<string, number | boolean>;
+    };
+
     return {
         bookingType: input.bookingType,
         bookingLocation: input.bookingLocation?.trim() || null,
         eventDate: input.eventDate || null,
+        eventType: input.eventType?.trim() || null,
+        customEventType: input.customEventType?.trim() || null,
+        crewRequirements: cleanCrewRequirements,
+        equipmentRequirements: cleanRequirementMap(input.equipmentRequirements),
+        postProductionRequirements: cleanRequirementMap(input.postProductionRequirements),
         estimatedDays,
         requirementSummary: input.requirementSummary?.trim() || description,
         budget,
@@ -132,6 +154,11 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
                 payment_status: "not_required",
                 booking_type: booking.bookingType,
                 booking_location: booking.bookingLocation,
+                event_type: booking.eventType,
+                custom_event_type: booking.customEventType,
+                crew_requirements: booking.crewRequirements,
+                equipment_requirements: booking.equipmentRequirements,
+                post_production_requirements: booking.postProductionRequirements,
                 event_date: booking.eventDate,
                 estimated_days: booking.estimatedDays,
                 requirement_summary: booking.requirementSummary,

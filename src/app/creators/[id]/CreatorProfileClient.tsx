@@ -181,7 +181,11 @@ export default function CreatorProfileClient({ creator }: { creator: CreatorProf
                                         key={item.id}
                                         className={`group relative rounded-2xl overflow-hidden bg-stone-100 cursor-pointer ${index === 0 ? 'sm:col-span-2 sm:h-[400px]' : 'h-[250px]'}`}
                                     >
-                                        <Image src={item.url} alt={item.title} fill className="object-cover transition-transform duration-700 group-hover:scale-105" />
+                                        {item.type === "video" ? (
+                                            <video src={item.url} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" muted playsInline preload="metadata" />
+                                        ) : (
+                                            <Image src={item.url} alt={item.title} fill className="object-cover transition-transform duration-700 group-hover:scale-105" />
+                                        )}
 
                                         {/* Hover Overlay */}
                                         <div className="absolute inset-0 bg-stone-900/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center p-6 text-center">
