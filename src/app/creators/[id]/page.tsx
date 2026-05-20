@@ -60,6 +60,14 @@ export default async function CreatorProfilePage({ params }: Props) {
         .select('id, client_id, status')
         .eq('creator_id', id);
 
+    const { data: portfolioItems } = await supabase
+        .from('portfolio_items')
+        .select('id, media_url, media_type, title, description, sort_order, created_at')
+        .eq('creator_id', id)
+        .eq('is_public', true)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
+
     const completedProjects = (creatorProjects || []).filter((p) => p.status === 'completed');
     const uniqueClients = new Set(completedProjects.map((p) => p.client_id));
 
@@ -83,17 +91,12 @@ export default async function CreatorProfilePage({ params }: Props) {
             repeatClients: `${uniqueClients.size}`,
             responseTime: "N/A",
         },
-        portfolio: (() => {
-            try {
-                const parsed = JSON.parse(dbCreator.portfolio_url || "{}");
-                return Array.isArray(parsed.items) ? parsed.items.map((img: { id: string; url: string }) => ({
-                    id: img.id,
-                    url: img.url,
-                    title: "Portfolio Item",
-                    type: "image"
-                })) : [];
-            } catch { return []; }
-        })(),
+        portfolio: (portfolioItems || []).map((item) => ({
+            id: String(item.id),
+            url: String(item.media_url),
+            title: String(item.title || "Portfolio Item"),
+            type: String(item.media_type || "image"),
+        })),
         services: dbCreator.day_rate ? [{ name: "Base Day Rate", price: `₹${Number(dbCreator.day_rate).toLocaleString()}`, time: "Per Day" }] : [],
     } : {
         id,

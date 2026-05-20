@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Zap, Settings, ArrowRight, ArrowLeft, CheckCircle, Plus, Minus, Trash2,
-    CalendarDays, Package, FileText, Brain, Upload
+    CalendarDays, Package, FileText, Brain, Upload, Search, Info
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { createBooking, type CreateBookingInput } from "@/app/actions/bookings";
@@ -12,6 +12,26 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { BrandLogo } from "@/components/BrandLogo";
+import {
+    CREW_CATEGORY_ICONS,
+    CUSTOM_EVENT_TYPE_ID,
+    EQUIPMENT_REQUIREMENT_OPTIONS,
+    EVENT_TYPE_CATEGORIES,
+    POST_PRODUCTION_REQUIREMENT_OPTIONS,
+    PRODUCTION_CREW_ROLES,
+    estimateCrewBudget,
+    getCrewRequirementSummary,
+    getEventTypeLabel,
+} from "@/lib/bookings/productionOptions";
+import {
+    ALL_EQUIPMENT_ITEMS,
+    EQUIPMENT_CATEGORIES,
+    EQUIPMENT_PACKAGES,
+    estimateEquipmentTotal,
+    getEquipmentItemById,
+    getRecommendedEquipment,
+} from "@/lib/bookings/equipmentCatalog";
+import type { ScriptAnalysisResult } from "@/lib/ai/scriptAnalysis";
 
 type MatchedCreator = {
     id: string;
@@ -50,17 +70,11 @@ export default function BookingFlow() {
     const [crew, setCrew] = useState<Array<{ id: string, name: string, rate: number, count: number }>>([]);
     const [days, setDays] = useState(1);
 
-    // Updated to Indian market rates
-    const availableRoles = [
-        { id: "photo", name: "Photographer", rate: 7000 },
-        { id: "dir", name: "Director", rate: 15000 },
-        { id: "dop", name: "Director of Photography", rate: 12000 },
-        { id: "cam", name: "Camera Operator", rate: 8000 },
-        { id: "edit", name: "Video Editor", rate: 8000 },
-        { id: "drone", name: "Drone Operator", rate: 10000 },
-        { id: "pa", name: "Production Assistant", rate: 3500 },
-        { id: "audio", name: "Sound Mixer", rate: 6000 }
-    ];
+    const availableRoles = PRODUCTION_CREW_ROLES.map((role) => ({
+        id: role.id,
+        name: role.name,
+        rate: Math.round((role.priceMin + role.priceMax) / 2),
+    }));
 
     const handleAddRole = (role: { id: string, name: string, rate: number }) => {
         setCrew(prev => {
@@ -84,18 +98,20 @@ export default function BookingFlow() {
 
 
     // ====== EQUIPMENT MODE STATE ======
-    const availableEquipment = [
-        { id: "cam_body", name: "Camera Body", rate: 3000 },
-        { id: "cam_lens", name: "Camera Lens Kit", rate: 2000 },
-        { id: "lights", name: "LED Light Panel", rate: 1500 },
-        { id: "audio_kit", name: "Microphone / Audio Kit", rate: 1500 },
-        { id: "gimbal", name: "Gimbal / Stabilizer", rate: 2000 },
-        { id: "drone_eq", name: "Drone (Pilot not included)", rate: 5000 },
-        { id: "accessories", name: "Accessories (Tripod, Monitor...)", rate: 500 }
-    ];
+    const availableEquipment = ALL_EQUIPMENT_ITEMS.map((item) => ({
+        id: item.id,
+        name: item.name,
+        rate: item.pricePerDay,
+    }));
 
     const [equipment, setEquipment] = useState<Array<{ id: string, name: string, rate: number, count: number }>>([]);
     const [equipDays, setEquipDays] = useState(1);
+    const [equipmentSearch, setEquipmentSearch] = useState("");
+    const [activeEquipmentCategory, setActiveEquipmentCategory] = useState("all");
+    const [openEquipmentCategories, setOpenEquipmentCategories] = useState<Record<string, boolean>>({
+        camera_equipment: true,
+        lighting_equipment: true,
+    });
 
     const handleAddEquipment = (item: { id: string, name: string, rate: number }) => {
         setEquipment(prev => {
@@ -113,17 +129,54 @@ export default function BookingFlow() {
         });
     };
 
-    const equipmentTotal = equipment.reduce((acc, e) => acc + (e.rate * e.count), 0) * equipDays;
+    const equipmentTotal = estimateEquipmentTotal(equipment, equipDays);
     const equipPlatformFee = equipmentTotal * 0.10;
     const equipGrandTotal = equipmentTotal + equipPlatformFee;
+    const filteredEquipmentCategories = useMemo(() => {
+        const query = equipmentSearch.trim().toLowerCase();
+        return EQUIPMENT_CATEGORIES
+            .filter((category) => activeEquipmentCategory === "all" || category.id === activeEquipmentCategory)
+            .map((category) => ({
+                ...category,
+                items: category.items.filter((item) => {
+                    const searchText = `${item.name} ${item.description} ${item.subcategory}`.toLowerCase();
+                    return !query || searchText.includes(query);
+                }),
+            }))
+            .filter((category) => category.items.length > 0);
+    }, [activeEquipmentCategory, equipmentSearch]);
+
+    const selectEquipmentPackage = (packageId: string) => {
+        const selectedPackage = EQUIPMENT_PACKAGES.find((kit) => kit.id === packageId);
+        if (!selectedPackage) return;
+
+        const packageItems = Object.entries(selectedPackage.items)
+            .map(([id, count]) => {
+                const catalogItem = getEquipmentItemById(id);
+                if (!catalogItem || count <= 0) return null;
+                return { id, name: catalogItem.name, rate: catalogItem.pricePerDay, count };
+            })
+            .filter((item): item is { id: string; name: string; rate: number; count: number } => Boolean(item));
+
+        setEquipment(packageItems);
+        toast.success(`${selectedPackage.name} added. You can customize quantities.`);
+    };
 
 
     // ====== QUICK BOOKING STATE (4 reordered steps) ======
     // Step 1: Event Type
     const [selectedEventType, setSelectedEventType] = useState("");
+    const [customEventType, setCustomEventType] = useState("");
+    const [eventTypeSearch, setEventTypeSearch] = useState("");
     // Step 2: Crew count
+    const [crewRequirements, setCrewRequirements] = useState<Record<string, number>>({
+        photographer: 1,
+        videographer: 1,
+    });
     const [photoCount, setPhotoCount] = useState(1);
     const [videoCount, setVideoCount] = useState(1);
+    const [equipmentRequirements, setEquipmentRequirements] = useState<Record<string, boolean>>({});
+    const [postProductionRequirements, setPostProductionRequirements] = useState<Record<string, boolean>>({});
     // Step 3: Date
     const [bookingDate, setBookingDate] = useState("");
     const  [bookingLocation, setBookingLocation] = useState("");
@@ -132,34 +185,137 @@ export default function BookingFlow() {
     const [isFixedBudget, setIsFixedBudget] = useState(false);
     const [fixedBudgetAmount, setFixedBudgetAmount] = useState("");
 
-    const eventTypes = [
-        "Wedding", "Corporate Event", "Birthday / Celebration",
-        "Product Shoot", "Music Video", "Documentary", "Commercial Ad"
-    ];
+    const selectedEventLabel = getEventTypeLabel(selectedEventType, customEventType);
+    const crewSummary = getCrewRequirementSummary(crewRequirements);
+    const quickEstimatedBudget = estimateCrewBudget(crewRequirements, 1);
+    const recommendedEquipment = getRecommendedEquipment(selectedEventType);
+
+    const filteredEventCategories = useMemo(() => {
+        const query = eventTypeSearch.trim().toLowerCase();
+        if (!query) return EVENT_TYPE_CATEGORIES;
+
+        return EVENT_TYPE_CATEGORIES
+            .map((category) => ({
+                ...category,
+                options: category.options.filter((option) => {
+                    return option.label.toLowerCase().includes(query) || category.label.toLowerCase().includes(query);
+                }),
+            }))
+            .filter((category) => category.options.length > 0);
+    }, [eventTypeSearch]);
+
+    const crewRolesByCategory = useMemo(() => {
+        return PRODUCTION_CREW_ROLES.reduce<Record<string, typeof PRODUCTION_CREW_ROLES>>((groups, role) => {
+            groups[role.category] = [...(groups[role.category] || []), role];
+            return groups;
+        }, {});
+    }, []);
 
     const getQuickBookingType = (): CreateBookingInput["bookingType"] => {
-        if (photoCount > 0 && videoCount > 0) return "production_crew";
-        if (videoCount > 0) return "videographer";
+        const hasCount = (id: string) => Number(crewRequirements[id] || 0) > 0;
+        const selectedRoleIds = Object.entries(crewRequirements)
+            .filter(([, count]) => Number(count) > 0)
+            .map(([id]) => id);
+
+        if (selectedRoleIds.length > 1) return "production_crew";
+        if (hasCount("videographer") || hasCount("camera_operator") || hasCount("assistant_cameraman")) return "videographer";
+        if (hasCount("video_editor") || hasCount("photo_editor") || hasCount("color_grading_artist")) return "editor";
+        if (hasCount("drone_operator")) return "production_crew";
         return "photographer";
     };
+
+    const updateCrewRequirement = (roleId: string, delta: number) => {
+        setCrewRequirements((current) => {
+            const nextCount = Math.max(0, Number(current[roleId] || 0) + delta);
+            const next = { ...current, [roleId]: nextCount };
+            if (nextCount === 0) delete next[roleId];
+            return next;
+        });
+    };
+
+    const toggleRequirement = (
+        setter: React.Dispatch<React.SetStateAction<Record<string, boolean>>>,
+        requirementId: string
+    ) => {
+        setter((current) => ({ ...current, [requirementId]: !current[requirementId] }));
+    };
+
+    useEffect(() => {
+        try {
+            const savedDraft = window.localStorage.getItem("shotcutcrew_quick_booking_draft");
+            if (!savedDraft) return;
+
+            const draft = JSON.parse(savedDraft) as {
+                selectedEventType?: string;
+                customEventType?: string;
+                crewRequirements?: Record<string, number>;
+                equipmentRequirements?: Record<string, boolean>;
+                postProductionRequirements?: Record<string, boolean>;
+                bookingDate?: string;
+                bookingLocation?: string;
+                budgetValue?: number;
+                isFixedBudget?: boolean;
+                fixedBudgetAmount?: string;
+            };
+
+            if (draft.selectedEventType) setSelectedEventType(draft.selectedEventType);
+            if (draft.customEventType) setCustomEventType(draft.customEventType);
+            if (draft.crewRequirements) setCrewRequirements(draft.crewRequirements);
+            if (draft.equipmentRequirements) setEquipmentRequirements(draft.equipmentRequirements);
+            if (draft.postProductionRequirements) setPostProductionRequirements(draft.postProductionRequirements);
+            if (draft.bookingDate) setBookingDate(draft.bookingDate);
+            if (draft.bookingLocation) setBookingLocation(draft.bookingLocation);
+            if (typeof draft.budgetValue === "number") setBudgetValue(draft.budgetValue);
+            if (typeof draft.isFixedBudget === "boolean") setIsFixedBudget(draft.isFixedBudget);
+            if (draft.fixedBudgetAmount) setFixedBudgetAmount(draft.fixedBudgetAmount);
+        } catch {
+            window.localStorage.removeItem("shotcutcrew_quick_booking_draft");
+        }
+    }, []);
+
+    useEffect(() => {
+        const draft = {
+            selectedEventType,
+            customEventType,
+            crewRequirements,
+            equipmentRequirements,
+            postProductionRequirements,
+            bookingDate,
+            bookingLocation,
+            budgetValue,
+            isFixedBudget,
+            fixedBudgetAmount,
+        };
+        window.localStorage.setItem("shotcutcrew_quick_booking_draft", JSON.stringify(draft));
+    }, [
+        selectedEventType,
+        customEventType,
+        crewRequirements,
+        equipmentRequirements,
+        postProductionRequirements,
+        bookingDate,
+        bookingLocation,
+        budgetValue,
+        isFixedBudget,
+        fixedBudgetAmount,
+    ]);
 
 
     // ====== SCRIPT ANALYSIS STATE ======
     const [scriptText, setScriptText] = useState("");
     const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [analysisResult, setAnalysisResult] = useState<{
-        roles: string[];
-        equipment: string[];
-        duration: string;
-        requirements: string[];
-    } | null>(null);
+    const [analysisResult, setAnalysisResult] = useState<ScriptAnalysisResult | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+            toast.error("PDF text extraction is not available locally yet. Please paste the PDF text or upload a .txt file.");
+            return;
+        }
         if (!file.name.endsWith('.txt') && file.type !== 'text/plain') {
-            toast.error("Please upload a .txt file.");
+            toast.error("Please upload a .txt file or paste your brief.");
             return;
         }
         const reader = new FileReader();
@@ -176,19 +332,50 @@ export default function BookingFlow() {
         }
         setIsAnalyzing(true);
         try {
-            const res = await fetch('/api/ai/analyze', {
+            const res = await fetch('/api/ai/script-analysis', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ scriptText }),
             });
-            if (!res.ok) throw new Error('Analysis failed');
+            if (!res.ok) {
+                const errorBody = await res.json().catch(() => null);
+                throw new Error(errorBody?.error || 'Analysis failed');
+            }
             const data = await res.json();
             setAnalysisResult(data);
-        } catch {
-            toast.error("Analysis failed. Please try again.");
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Analysis failed. Please try again.");
         } finally {
             setIsAnalyzing(false);
         }
+    };
+
+    const applyScriptAnalysisToBooking = () => {
+        if (!analysisResult) return;
+
+        const crewFromAnalysis: Record<string, number> = {};
+        for (const crewItem of analysisResult.recommended_crew) {
+            const normalizedRole = crewItem.role.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+            const matchedRole = PRODUCTION_CREW_ROLES.find((role) => {
+                return normalizedRole.includes(role.id) || role.name.toLowerCase() === crewItem.role.toLowerCase();
+            });
+            if (matchedRole) crewFromAnalysis[matchedRole.id] = Math.max(crewFromAnalysis[matchedRole.id] || 0, crewItem.quantity);
+        }
+
+        const equipmentFromAnalysis: Record<string, boolean> = {};
+        for (const equipmentItem of analysisResult.suggested_equipment) {
+            const normalizedName = equipmentItem.name.toLowerCase();
+            const matchedEquipment = EQUIPMENT_REQUIREMENT_OPTIONS.find((item) => normalizedName.includes(item.label.toLowerCase().split(" ")[0]));
+            if (matchedEquipment) equipmentFromAnalysis[matchedEquipment.id] = true;
+        }
+
+        setSelectedEventType(CUSTOM_EVENT_TYPE_ID);
+        setCustomEventType(analysisResult.detected_project_type || "Custom Requirement");
+        if (Object.keys(crewFromAnalysis).length > 0) setCrewRequirements(crewFromAnalysis);
+        if (Object.keys(equipmentFromAnalysis).length > 0) setEquipmentRequirements(equipmentFromAnalysis);
+        setMode("quick");
+        setStep(2);
+        toast.success("Recommendations applied to your booking draft.");
     };
 
 
@@ -202,6 +389,7 @@ export default function BookingFlow() {
         }
         setIsSubmitting(true);
         const description = `Custom Crew Build | Duration: ${days} days | Roles: ${crew.map(c => `${c.count}x ${c.name}`).join(', ')}`;
+        const builderCrewRequirements = Object.fromEntries(crew.map((member) => [member.id, member.count]));
         try {
             const result = await createBooking({
                 bookingType: "production_crew",
@@ -210,6 +398,7 @@ export default function BookingFlow() {
                 requirementSummary: description,
                 budget: grandTotal,
                 estimatedDays: days,
+                crewRequirements: builderCrewRequirements,
             });
             if (!result.success) {
                 throw new Error(result.message);
@@ -230,6 +419,7 @@ export default function BookingFlow() {
         }
         setIsSubmitting(true);
         const description = `Equipment Booking | Duration: ${equipDays} days | Items: ${equipment.map(e => `${e.count}x ${e.name}`).join(', ')}`;
+        const equipmentRequestCounts = Object.fromEntries(equipment.map((item) => [item.id, item.count]));
         try {
             const result = await createBooking({
                 bookingType: "equipment",
@@ -238,6 +428,7 @@ export default function BookingFlow() {
                 requirementSummary: description,
                 budget: equipGrandTotal,
                 estimatedDays: equipDays,
+                equipmentRequirements: equipmentRequestCounts,
             });
             if (!result.success) {
                 throw new Error(result.message);
@@ -258,12 +449,30 @@ export default function BookingFlow() {
         }
         setIsSubmitting(true);
         const effectiveBudget = isFixedBudget ? (parseInt(fixedBudgetAmount) || budgetValue) : budgetValue;
-        const description = `Quick Booking | Event: ${selectedEventType} | Photographers: ${photoCount}, Videographers: ${videoCount} | Date: ${bookingDate} | Location: ${bookingLocation}`;
+        const selectedEquipment = EQUIPMENT_REQUIREMENT_OPTIONS
+            .filter((item) => equipmentRequirements[item.id])
+            .map((item) => item.label);
+        const selectedPostProduction = POST_PRODUCTION_REQUIREMENT_OPTIONS
+            .filter((item) => postProductionRequirements[item.id])
+            .map((item) => item.label);
+        const description = [
+            `Quick Booking | Event: ${selectedEventLabel}`,
+            crewSummary ? `Crew: ${crewSummary}` : null,
+            selectedEquipment.length ? `Equipment: ${selectedEquipment.join(", ")}` : null,
+            selectedPostProduction.length ? `Post Production: ${selectedPostProduction.join(", ")}` : null,
+            `Date: ${bookingDate}`,
+            `Location: ${bookingLocation}`,
+        ].filter(Boolean).join(" | ");
         try {
             const result = await createBooking({
                 bookingType: getQuickBookingType(),
                 bookingLocation,
                 eventDate: bookingDate,
+                eventType: selectedEventType,
+                customEventType: selectedEventType === CUSTOM_EVENT_TYPE_ID ? customEventType : null,
+                crewRequirements,
+                equipmentRequirements,
+                postProductionRequirements,
                 title: "Quick Booking Request",
                 description,
                 requirementSummary: description,
@@ -274,6 +483,7 @@ export default function BookingFlow() {
                 throw new Error(result.message);
             }
             setBookingMatchCount(result.match_count || 0);
+            window.localStorage.removeItem("shotcutcrew_quick_booking_draft");
             setStep(5); // Success step
         } catch (error: unknown) {
             toast.error((error as Error).message || "Failed to process quick booking.");
@@ -435,7 +645,7 @@ export default function BookingFlow() {
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: -20 }}
-                            className="max-w-2xl mx-auto w-full bg-white p-8 md:p-12 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100"
+                            className="max-w-5xl mx-auto w-full bg-white p-6 md:p-10 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100"
                         >
                             {step < 5 && <StepIndicator current={step} total={4} />}
 
@@ -444,30 +654,152 @@ export default function BookingFlow() {
                                 <div className="space-y-8">
                                     <div>
                                         <h2 className="text-3xl font-black text-stone-900 mb-2 font-display">What&apos;s the event type?</h2>
-                                        <p className="text-stone-500">Select the occasion or project type for your shoot.</p>
+                                        <p className="text-stone-500">Select a production category or search for the closest project type.</p>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {eventTypes.map((type) => (
-                                            <div
-                                                key={type}
-                                                onClick={() => { setSelectedEventType(type); setStep(2); }}
-                                                className={`p-4 border-2 rounded-xl text-center font-bold cursor-pointer transition-colors active:scale-95 text-sm ${selectedEventType === type ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-stone-200 text-stone-700 hover:border-orange-500 hover:bg-orange-50'}`}
-                                            >
-                                                {type}
-                                            </div>
-                                        ))}
+                                    <div className="relative">
+                                        <Search className="w-5 h-5 text-stone-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                                        <input
+                                            type="search"
+                                            value={eventTypeSearch}
+                                            onChange={(event) => setEventTypeSearch(event.target.value)}
+                                            placeholder="Search event or project type"
+                                            className="w-full pl-12 pr-4 py-4 rounded-2xl border border-stone-200 bg-stone-50 text-stone-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                        />
+                                    </div>
+                                    <div className="space-y-7">
+                                        {filteredEventCategories.map((category) => {
+                                            const CategoryIcon = category.icon;
+                                            return (
+                                                <section key={category.id} aria-labelledby={`event-category-${category.id}`} className="space-y-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <CategoryIcon className="w-4 h-4 text-orange-600" />
+                                                        <h3 id={`event-category-${category.id}`} className="text-sm font-black uppercase tracking-wide text-stone-700">
+                                                            {category.label}
+                                                        </h3>
+                                                    </div>
+                                                    <div className="grid sm:grid-cols-2 gap-3">
+                                                        {category.options.map((option) => {
+                                                            const isSelected = selectedEventType === option.id;
+                                                            return (
+                                                                <button
+                                                                    key={option.id}
+                                                                    type="button"
+                                                                    onClick={() => setSelectedEventType(option.id)}
+                                                                    className={`text-left p-4 border-2 rounded-2xl font-bold transition-all active:scale-[0.98] text-sm ${isSelected ? "border-orange-500 bg-orange-50 text-orange-700 shadow-lg shadow-orange-100" : "border-stone-200 text-stone-700 hover:border-orange-300 hover:bg-orange-50/60"}`}
+                                                                >
+                                                                    {option.label}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </section>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {selectedEventType === CUSTOM_EVENT_TYPE_ID && (
+                                        <div>
+                                            <label htmlFor="custom-event-type" className="block text-sm font-bold text-stone-700 mb-2">Custom requirement</label>
+                                            <input
+                                                id="custom-event-type"
+                                                type="text"
+                                                value={customEventType}
+                                                onChange={(event) => setCustomEventType(event.target.value)}
+                                                placeholder="Describe your shoot/project type"
+                                                className="w-full p-4 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="sticky bottom-4 z-10 rounded-2xl bg-white/95 p-3 shadow-xl shadow-stone-200/70 backdrop-blur md:static md:p-0 md:shadow-none">
+                                        <button
+                                            onClick={() => {
+                                                if (!selectedEventType) { toast.error("Select an event or project type."); return; }
+                                                if (selectedEventType === CUSTOM_EVENT_TYPE_ID && !customEventType.trim()) { toast.error("Describe your custom shoot or project type."); return; }
+                                                setStep(2);
+                                            }}
+                                            className="w-full py-4 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors"
+                                        >
+                                            Continue to Crew
+                                        </button>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Step 2: Number of Photographers / Videographers */}
+                            {/* Step 2: Production crew, equipment, and post-production */}
                             {step === 2 && (
                                 <div className="space-y-8">
                                     <div>
-                                        <h2 className="text-3xl font-black text-stone-900 mb-2 font-display">How many crew?</h2>
-                                        <p className="text-stone-500">Select the number of photographers and videographers needed.</p>
+                                        <h2 className="text-3xl font-black text-stone-900 mb-2 font-display">Build your production crew</h2>
+                                        <p className="text-stone-500">Add the crew roles, equipment, and post-production support you need.</p>
                                     </div>
-                                    <div className="space-y-4">
+                                    <div className="space-y-7">
+                                        {Object.entries(crewRolesByCategory).map(([category, roles]) => {
+                                            const CategoryIcon = CREW_CATEGORY_ICONS[category] || Info;
+                                            return (
+                                                <section key={category} className="space-y-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <CategoryIcon className="w-4 h-4 text-orange-600" />
+                                                        <h3 className="text-sm font-black uppercase tracking-wide text-stone-700">{category}</h3>
+                                                    </div>
+                                                    <div className="grid sm:grid-cols-2 gap-3">
+                                                        {roles.map((role) => (
+                                                            <div key={role.id} className="rounded-2xl border border-stone-200 bg-stone-50 p-4 transition-colors hover:border-orange-200 hover:bg-orange-50/50">
+                                                                <div className="flex items-start justify-between gap-3">
+                                                                    <div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <h4 className="font-black text-stone-900">{role.name}</h4>
+                                                                            <span title={role.info} aria-label={role.info} className="text-stone-400">
+                                                                                <Info className="w-4 h-4" />
+                                                                            </span>
+                                                                        </div>
+                                                                        <p className="text-sm font-medium text-stone-500">Rs {role.priceMin.toLocaleString("en-IN")} - Rs {role.priceMax.toLocaleString("en-IN")}/day</p>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-2 py-1">
+                                                                        <button aria-label={`Decrease ${role.name}`} title={`Decrease ${role.name}`} onClick={() => updateCrewRequirement(role.id, -1)} className="p-2 text-stone-500 hover:text-stone-900 disabled:opacity-40" disabled={!crewRequirements[role.id]}>
+                                                                            <Minus className="w-4 h-4" />
+                                                                        </button>
+                                                                        <span className="w-6 text-center text-lg font-black text-stone-900">{crewRequirements[role.id] || 0}</span>
+                                                                        <button aria-label={`Increase ${role.name}`} title={`Increase ${role.name}`} onClick={() => updateCrewRequirement(role.id, 1)} className="p-2 text-orange-600 hover:text-orange-700">
+                                                                            <Plus className="w-4 h-4" />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </section>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <div className="rounded-2xl border border-orange-100 bg-orange-50/50 p-5">
+                                            <h3 className="font-black text-stone-900 mb-3">Equipment Needed</h3>
+                                            <div className="flex flex-wrap gap-2">
+                                                {EQUIPMENT_REQUIREMENT_OPTIONS.map((item) => (
+                                                    <button key={item.id} type="button" onClick={() => toggleRequirement(setEquipmentRequirements, item.id)} className={`rounded-full border px-4 py-2 text-sm font-bold transition-colors ${equipmentRequirements[item.id] ? "border-orange-500 bg-white text-orange-700" : "border-stone-200 bg-white/70 text-stone-600 hover:border-orange-300"}`}>
+                                                        {item.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="rounded-2xl border border-orange-100 bg-orange-50/50 p-5">
+                                            <h3 className="font-black text-stone-900 mb-3">Post Production</h3>
+                                            <div className="flex flex-wrap gap-2">
+                                                {POST_PRODUCTION_REQUIREMENT_OPTIONS.map((item) => (
+                                                    <button key={item.id} type="button" onClick={() => toggleRequirement(setPostProductionRequirements, item.id)} className={`rounded-full border px-4 py-2 text-sm font-bold transition-colors ${postProductionRequirements[item.id] ? "border-orange-500 bg-white text-orange-700" : "border-stone-200 bg-white/70 text-stone-600 hover:border-orange-300"}`}>
+                                                        {item.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="rounded-2xl bg-stone-900 p-5 text-white">
+                                        <p className="text-sm font-semibold text-stone-300">Estimated crew budget</p>
+                                        <div className="mt-1 text-3xl font-black font-display">Rs {quickEstimatedBudget.toLocaleString("en-IN")}</div>
+                                        <p className="mt-2 text-sm text-stone-300">Final pricing depends on city, creator profile, equipment, and delivery requirements.</p>
+                                    </div>
+                                    <div className="hidden">
                                         {/* Photographers */}
                                         <div className="flex items-center justify-between bg-stone-50 p-5 rounded-2xl border border-stone-200">
                                             <div>
@@ -501,11 +833,11 @@ export default function BookingFlow() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex gap-3">
+                                    <div className="sticky bottom-4 z-10 flex gap-3 rounded-2xl bg-white/95 p-3 shadow-xl shadow-stone-200/70 backdrop-blur md:static md:p-0 md:shadow-none">
                                         <button onClick={() => setStep(1)} className="flex-1 py-4 bg-stone-100 text-stone-700 font-bold rounded-xl hover:bg-stone-200 transition-colors">Back</button>
                                         <button
                                             onClick={() => {
-                                                if (photoCount + videoCount === 0) { toast.error("Select at least 1 photographer or videographer."); return; }
+                                                if (!crewSummary) { toast.error("Select at least one crew role."); return; }
                                                 setStep(3);
                                             }}
                                             className="flex-[2] py-4 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors"
@@ -535,7 +867,7 @@ export default function BookingFlow() {
                                         />
                                     </div>
                                      <div>
-                                        <label htmlFor="quick-booking-location" className="block text-sm font-bold text-stone-700 mb-2">Shoot Location</label>
+                                        <label htmlFor="quick-booking-location" className="block text-sm font-bold text-stone-700 mb-2">Shoot City / Location</label>
                                         <input
                                             id="quick-booking-location"
                                             aria-label="Shoot location"
@@ -548,7 +880,11 @@ export default function BookingFlow() {
                                     <div className="flex gap-3">
                                         <button onClick={() => setStep(2)} className="flex-1 py-4 bg-stone-100 text-stone-700 font-bold rounded-xl hover:bg-stone-200 transition-colors">Back</button>
                                         <button
-                                            onClick={() => { if (!bookingDate) { toast.error("Please select a date."); return; } setStep(4); }}
+                                            onClick={() => {
+                                                if (!bookingDate) { toast.error("Please select a date."); return; }
+                                                if (!bookingLocation.trim()) { toast.error("Please enter the shoot city or location."); return; }
+                                                setStep(4);
+                                            }}
                                             className="flex-[2] py-4 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors"
                                         >
                                             Next
@@ -566,6 +902,13 @@ export default function BookingFlow() {
                                         <p className="text-stone-500">Set your maximum budget for this project.</p>
                                     </div>
                                     <div className="space-y-6">
+                                        <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
+                                            <p className="text-sm font-bold text-stone-600">Estimated production total</p>
+                                            <div className="mt-1 text-3xl font-black text-orange-600 font-display">
+                                                Rs {quickEstimatedBudget.toLocaleString("en-IN")}
+                                            </div>
+                                            <p className="mt-2 text-sm text-stone-600">Use this as a guide. You can set a higher or fixed budget based on project quality, deliverables, and travel.</p>
+                                        </div>
                                         {/* Fixed Budget toggle */}
                                         <div className="flex items-center gap-3 p-4 bg-stone-50 rounded-xl border border-stone-200">
                                             <input
@@ -821,9 +1164,88 @@ export default function BookingFlow() {
                                 <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
                                     <div className="mb-8">
                                         <h2 className="text-3xl font-black text-stone-900 mb-2 font-display">Book Equipment</h2>
-                                        <p className="text-stone-500">Select gear items and quantities for your production.</p>
+                                        <p className="text-stone-500">Choose rental-grade camera, lighting, audio, broadcast, and post-production equipment.</p>
                                     </div>
-                                    <div className="grid sm:grid-cols-2 gap-4">
+                                    <div className="space-y-6">
+                                        <div>
+                                            <h3 className="font-black text-stone-900 mb-3">Production Packages</h3>
+                                            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                                                {EQUIPMENT_PACKAGES.map((kit) => (
+                                                    <button key={kit.id} type="button" onClick={() => selectEquipmentPackage(kit.id)} className="rounded-2xl border border-stone-200 bg-stone-50 p-4 text-left transition-all hover:border-orange-300 hover:bg-orange-50">
+                                                        <div className="font-black text-stone-900">{kit.name}</div>
+                                                        <p className="mt-1 text-xs font-medium text-stone-500">{kit.description}</p>
+                                                        <p className="mt-3 text-sm font-black text-orange-600">Rs {kit.estimatedPrice.toLocaleString("en-IN")} est.</p>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {recommendedEquipment.length > 0 && (
+                                            <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-5">
+                                                <h3 className="font-black text-stone-900 mb-3">Recommended for {selectedEventLabel}</h3>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {recommendedEquipment.map((item) => (
+                                                        <button key={item.id} type="button" onClick={() => handleAddEquipment({ id: item.id, name: item.name, rate: item.pricePerDay })} className="rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-bold text-orange-700 hover:border-orange-500">
+                                                            + {item.name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="grid md:grid-cols-[1fr_auto] gap-3">
+                                            <div className="relative">
+                                                <Search className="w-5 h-5 text-stone-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                                                <input type="search" value={equipmentSearch} onChange={(event) => setEquipmentSearch(event.target.value)} placeholder="Search camera, lens, light, audio, drone..." className="w-full pl-12 pr-4 py-4 rounded-2xl border border-stone-200 bg-stone-50 text-stone-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500" />
+                                            </div>
+                                            <select value={activeEquipmentCategory} onChange={(event) => setActiveEquipmentCategory(event.target.value)} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm font-bold text-stone-700 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500">
+                                                <option value="all">All categories</option>
+                                                {EQUIPMENT_CATEGORIES.map((category) => (
+                                                    <option key={category.id} value={category.id}>{category.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-4">
+                                            {filteredEquipmentCategories.map((category) => {
+                                                const CategoryIcon = category.icon;
+                                                const isOpen = openEquipmentCategories[category.id] ?? true;
+                                                return (
+                                                    <section key={category.id} className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
+                                                        <button type="button" onClick={() => setOpenEquipmentCategories((current) => ({ ...current, [category.id]: !isOpen }))} className="flex w-full items-center justify-between gap-3 bg-stone-50 px-5 py-4 text-left">
+                                                            <span className="flex items-center gap-2 font-black text-stone-900"><CategoryIcon className="w-5 h-5 text-orange-600" />{category.name}</span>
+                                                            <span className="text-sm font-bold text-stone-500">{isOpen ? "Hide" : "Show"}</span>
+                                                        </button>
+                                                        {isOpen && (
+                                                            <div className="grid sm:grid-cols-2 gap-3 p-4">
+                                                                {category.items.map((item) => {
+                                                                    const selectedCount = equipment.find((entry) => entry.id === item.id)?.count || 0;
+                                                                    return (
+                                                                        <div key={item.id} className={`rounded-2xl border p-4 transition-all ${selectedCount ? "border-orange-500 bg-orange-50 shadow-lg shadow-orange-100" : "border-stone-200 bg-white hover:border-orange-200"}`}>
+                                                                            <div className="flex items-start justify-between gap-3">
+                                                                                <div>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <h4 className="font-black text-stone-900">{item.name}</h4>
+                                                                                        {selectedCount > 0 && <span className="rounded-full bg-orange-600 px-2 py-0.5 text-xs font-black text-white">{selectedCount}</span>}
+                                                                                    </div>
+                                                                                    <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-stone-400">{item.subcategory} - {item.availability}</p>
+                                                                                    <p className="mt-2 text-sm text-stone-600">{item.description}</p>
+                                                                                    <p className="mt-3 text-sm font-black text-orange-600">Rs {item.pricePerDay.toLocaleString("en-IN")}/day</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="mt-4 flex items-center justify-between rounded-xl border border-stone-200 bg-stone-50 px-2 py-1">
+                                                                                <button aria-label={`Decrease ${item.name}`} title={`Decrease ${item.name}`} onClick={() => handleRemoveEquipment(item.id)} className="p-2 text-stone-500 hover:text-stone-900 disabled:opacity-40" disabled={!selectedCount}><Minus className="w-4 h-4" /></button>
+                                                                                <span className="text-lg font-black text-stone-900">{selectedCount}</span>
+                                                                                <button aria-label={`Increase ${item.name}`} title={`Increase ${item.name}`} onClick={() => handleAddEquipment({ id: item.id, name: item.name, rate: item.pricePerDay })} className="p-2 text-orange-600 hover:text-orange-700"><Plus className="w-4 h-4" /></button>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </section>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    <div className="hidden">
                                         {availableEquipment.map(item => (
                                             <div key={item.id} className="p-4 border border-stone-200 rounded-2xl flex items-center justify-between hover:border-violet-200 hover:bg-violet-50/50 transition-colors group">
                                                 <div>
@@ -976,7 +1398,7 @@ export default function BookingFlow() {
                                                 aria-label="Script text file upload"
                                                 ref={fileInputRef}
                                                 type="file"
-                                                accept=".txt,text/plain"
+                                                accept=".txt,text/plain,.pdf,application/pdf"
                                                 className="hidden"
                                                 onChange={handleFileUpload}
                                             />
@@ -1008,14 +1430,27 @@ export default function BookingFlow() {
                                             <CheckCircle className="w-5 h-5" />
                                             <span className="font-bold text-sm">Analysis complete</span>
                                         </div>
+                                        <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
+                                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                                <div>
+                                                    <h3 className="font-black text-stone-900">Project Summary</h3>
+                                                    <p className="mt-2 text-sm text-stone-700">{analysisResult.project_summary}</p>
+                                                </div>
+                                                <div className="rounded-full bg-white px-4 py-2 text-sm font-black text-orange-700">AI confidence: {analysisResult.confidence}</div>
+                                            </div>
+                                            {analysisResult.missing_information.length > 0 && (
+                                                <p className="mt-3 text-sm font-semibold text-orange-800">Missing: {analysisResult.missing_information.join(", ")}</p>
+                                            )}
+                                        </div>
+                                        <div className="hidden">
                                         <div className="grid md:grid-cols-2 gap-5">
                                             <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100">
                                                 <h4 className="font-bold text-orange-900 mb-3">👥 Recommended Crew</h4>
                                                 <ul className="space-y-1.5">
-                                                    {analysisResult.roles.map((role, i) => (
+                                                    {analysisResult.recommended_crew.map((crewItem, i) => (
                                                         <li key={i} className="text-sm text-orange-800 flex items-center gap-2">
                                                             <span className="w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0" />
-                                                            {role}
+                                                            {crewItem.quantity}x {crewItem.role}
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -1023,22 +1458,22 @@ export default function BookingFlow() {
                                             <div className="bg-violet-50 p-5 rounded-2xl border border-violet-100">
                                                 <h4 className="font-bold text-violet-900 mb-3">🎥 Suggested Equipment</h4>
                                                 <ul className="space-y-1.5">
-                                                    {analysisResult.equipment.map((item, i) => (
+                                                    {analysisResult.suggested_equipment.map((item, i) => (
                                                         <li key={i} className="text-sm text-violet-800 flex items-center gap-2">
                                                             <span className="w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
-                                                            {item}
+                                                            {item.quantity}x {item.name}
                                                         </li>
                                                     ))}
                                                 </ul>
                                             </div>
                                             <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
                                                 <h4 className="font-bold text-blue-900 mb-3">📅 Estimated Duration</h4>
-                                                <p className="text-sm text-blue-800 font-medium">{analysisResult.duration}</p>
+                                                <p className="text-sm text-blue-800 font-medium">{analysisResult.estimated_duration}</p>
                                             </div>
                                             <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100">
                                                 <h4 className="font-bold text-emerald-900 mb-3">⚙️ Key Requirements</h4>
                                                 <ul className="space-y-1.5">
-                                                    {analysisResult.requirements.map((req, i) => (
+                                                    {analysisResult.production_checklist.map((req, i) => (
                                                         <li key={i} className="text-sm text-emerald-800 flex items-center gap-2">
                                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
                                                             {req}
@@ -1046,6 +1481,17 @@ export default function BookingFlow() {
                                                     ))}
                                                 </ul>
                                             </div>
+                                        </div>
+                                        </div>
+                                        <div className="grid md:grid-cols-2 gap-5">
+                                            <AnalysisList title="Recommended Crew" items={analysisResult.recommended_crew.map((item) => `${item.quantity}x ${item.role} - ${item.reason}`)} tone="orange" />
+                                            <AnalysisList title="Suggested Equipment" items={analysisResult.suggested_equipment.map((item) => `${item.quantity}x ${item.name} - Rs ${item.estimated_price_per_day.toLocaleString("en-IN")}/day - ${item.reason}`)} tone="violet" />
+                                            <AnalysisList title="Estimated Shoot Schedule" items={[analysisResult.estimated_duration, `Post: ${analysisResult.post_production_time}`]} tone="blue" />
+                                            <AnalysisList title="Budget Estimate" items={[analysisResult.budget_range, `Complexity: ${analysisResult.complexity_level}`]} tone="emerald" />
+                                            <AnalysisList title="Key Requirements" items={[...analysisResult.shot_requirements, ...analysisResult.audio_requirements, ...analysisResult.lighting_requirements]} tone="orange" />
+                                            <AnalysisList title="Risk & Permissions" items={[...analysisResult.permissions, ...analysisResult.risks_or_challenges]} tone="violet" />
+                                            <AnalysisList title="Art, Props & Locations" items={[...analysisResult.locations, ...analysisResult.props_art_direction]} tone="blue" />
+                                            <AnalysisList title="Production Checklist" items={analysisResult.production_checklist} tone="emerald" />
                                         </div>
                                         <div className="flex gap-3 pt-2">
                                             <button
@@ -1055,10 +1501,10 @@ export default function BookingFlow() {
                                                 Analyze Another
                                             </button>
                                             <button
-                                                onClick={() => setMode("builder")}
+                                                onClick={applyScriptAnalysisToBooking}
                                                 className="flex-[2] py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors text-sm flex items-center justify-center gap-2"
                                             >
-                                                Build Crew from Results <ArrowRight className="w-4 h-4" />
+                                                Use these recommendations <ArrowRight className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
@@ -1080,3 +1526,39 @@ const SparklesIcon = ({ className }: { className?: string }) => (
         <path d="M20 3v4" /><path d="M22 5h-4" /><path d="M4 17v2" /><path d="M5 18H3" />
     </svg>
 );
+
+const analysisToneClasses = {
+    orange: "bg-orange-50 border-orange-100 text-orange-900 marker:bg-orange-400",
+    violet: "bg-violet-50 border-violet-100 text-violet-900 marker:bg-violet-400",
+    blue: "bg-blue-50 border-blue-100 text-blue-900 marker:bg-blue-400",
+    emerald: "bg-emerald-50 border-emerald-100 text-emerald-900 marker:bg-emerald-400",
+};
+
+function AnalysisList({
+    title,
+    items,
+    tone,
+}: {
+    title: string;
+    items: string[];
+    tone: keyof typeof analysisToneClasses;
+}) {
+    const classes = analysisToneClasses[tone];
+    return (
+        <div className={`p-5 rounded-2xl border ${classes}`}>
+            <h4 className="font-bold mb-3">{title}</h4>
+            {items.length > 0 ? (
+                <ul className="space-y-1.5">
+                    {items.map((item, index) => (
+                        <li key={`${title}-${index}`} className="text-sm flex items-start gap-2">
+                            <span className="mt-2 w-1.5 h-1.5 rounded-full bg-current flex-shrink-0 opacity-60" />
+                            <span>{item}</span>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <p className="text-sm opacity-75">No specific items detected.</p>
+            )}
+        </div>
+    );
+}
