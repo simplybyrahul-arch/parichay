@@ -1,19 +1,41 @@
-export const creatorServiceOptions = [
-  { value: "photographer", label: "Photographer" },
-  { value: "videographer", label: "Videographer" },
-  { value: "video_editor", label: "Video Editor" },
-  { value: "photo_editor", label: "Photo Editor" },
-  { value: "studio", label: "Studio" },
-  { value: "equipment_provider", label: "Equipment Provider" },
-  { value: "drone_operator", label: "Drone Operator" },
-  { value: "makeup_artist", label: "Makeup Artist" },
-  { value: "production_crew", label: "Production Crew" },
-  { value: "event_crew", label: "Event Crew" },
-  { value: "other", label: "Other" },
-] as const;
+import {
+  BOOKING_CREW_CATEGORIES,
+  BOOKING_CREW_OPTIONS,
+  BOOKING_EVENT_OPTIONS,
+  EQUIPMENT_REQUIREMENT_OPTIONS,
+  POST_PRODUCTION_OPTIONS,
+} from "@/config/bookingOptions";
+
+export const creatorServiceOptions = BOOKING_CREW_OPTIONS.map((option) => ({
+  value: option.id,
+  label: option.label,
+})) as { value: string; label: string }[];
+
+export type CreatorServiceOption = {
+  value: string;
+  label: string;
+};
+
+export type CreatorServiceCategory = {
+  category: string;
+  services: CreatorServiceOption[];
+};
+
+export const creatorServiceCategories: CreatorServiceCategory[] = BOOKING_CREW_CATEGORIES.map((category) => ({
+  category: category.label,
+  services: category.options.map((option) => ({ value: option.id, label: option.label })),
+}));
+
+export const industryServiceOptions = creatorServiceCategories.flatMap((group) => group.services);
 
 export function creatorServiceLabel(value: string | null | undefined) {
-  return creatorServiceOptions.find((option) => option.value === value)?.label || value || "Creator";
+  return industryServiceOptions.find((option) => option.value === value)?.label
+    || BOOKING_EVENT_OPTIONS.find((option) => option.id === value)?.label
+    || EQUIPMENT_REQUIREMENT_OPTIONS.find((option) => option.id === value)?.label
+    || POST_PRODUCTION_OPTIONS.find((option) => option.id === value)?.label
+    || creatorServiceOptions.find((option) => option.value === value)?.label
+    || value
+    || "Creator";
 }
 
 export function parseCommaList(value: string) {
