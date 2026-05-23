@@ -20,7 +20,8 @@ import {
     Image as ImageIcon,
     LayoutTemplate,
     LogOut,
-    MapPin
+    MapPin,
+    ChevronDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -31,15 +32,55 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { listCreatorOpportunities, respondToOpportunity, type CreatorOpportunity } from "../actions/opportunities";
 import { startAssignedProject } from "../actions/creatorProjects";
 import { listMyNotifications, markNotificationRead, type UserNotification } from "../actions/notifications";
-import { commaList, creatorServiceOptions, parseCommaList } from "@/lib/creators/services";
+import { commaList, creatorServiceLabel, parseCommaList } from "@/lib/creators/services";
+import {
+    BOOKING_CREW_CATEGORIES,
+    BOOKING_EVENT_CATEGORIES,
+    EQUIPMENT_REQUIREMENT_CATEGORIES,
+    POST_PRODUCTION_CATEGORIES,
+    getSelectedCount,
+    type BookingCategory,
+} from "@/config/bookingOptions";
 import { formatPaymentStatus } from "@/lib/projects/statusLabels";
 import { RoleSettingsPanel } from "@/components/settings/RoleSettingsPanel";
 import { deletePortfolioItem, listMyPortfolioItems, updatePortfolioItem, uploadPortfolioMedia, type PortfolioItem } from "../actions/portfolio";
+import { listCreatorQuickBookings, respondToQuickBooking, type CreatorQuickBookingRequest } from "../actions/quickBookings";
 
 const closedProjectStatuses = new Set(["expired", "cancelled", "completed", "disputed"]);
 const acceptedPortfolioTypes = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime", "video/webm"]);
 const maxPortfolioImageSize = 10 * 1024 * 1024;
 const maxPortfolioVideoSize = 100 * 1024 * 1024;
+const specializationOptions = [
+    "Luxury Weddings",
+    "Cinematic Films",
+    "Product Ads",
+    "Social Media Content",
+    "Corporate Shoots",
+    "Fashion Campaigns",
+    "Drone Cinematography",
+    "Music Videos",
+];
+const styleOptions = [
+    "Cinematic",
+    "Documentary",
+    "Luxury",
+    "Minimal",
+    "Creative",
+    "Traditional",
+    "Corporate",
+    "Viral/Social Media",
+    "Fashion Editorial",
+    "Dark Moody",
+    "Bright & Airy",
+];
+const budgetTierOptions = ["budget", "standard", "premium"];
+const travelOptions = [
+    { label: "Local Only", radius: 0 },
+    { label: "Within 50km", radius: 50 },
+    { label: "Within 200km", radius: 200 },
+    { label: "Statewide", radius: 500 },
+    { label: "Pan India", radius: 3000 },
+];
 
 function formatCurrency(value: number | null) {
     if (!value) return "Budget not specified";
@@ -138,7 +179,7 @@ export default function CreatorDashboard() {
     const fetchProfileData = async (uid: string) => {
         const { data, error } = await supabase
             .from('creators')
-            .select('bio, location, city, state, phone, whatsapp_phone, role, day_rate, portfolio_url, verified, equipment, tags, capacity_per_day, service_cities, service_radius_km, travel_enabled, available_for_booking, budget_flexibility, whatsapp_opt_in')
+            .select('bio, location, city, state, phone, whatsapp_phone, role, primary_service, service_tags, event_tags, equipment_tags, post_production_tags, specialization_tags, style_tags, travel_radius_km, travel_locations, budget_tiers, instant_booking_enabled, response_time, completed_shoots, response_rate, completion_rate, repeat_clients, day_rate, portfolio_url, verified, equipment, tags, capacity_per_day, service_cities, service_radius_km, travel_enabled, available_for_booking, budget_flexibility, whatsapp_opt_in')
             .eq('id', uid)
             .single();
         if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "Row not found"
@@ -150,6 +191,22 @@ export default function CreatorDashboard() {
             phone: "",
             whatsapp_phone: "",
             role: "",
+            primary_service: "",
+            service_tags: [],
+            event_tags: [],
+            equipment_tags: [],
+            post_production_tags: [],
+            specialization_tags: [],
+            style_tags: [],
+            travel_radius_km: 0,
+            travel_locations: [],
+            budget_tiers: [],
+            instant_booking_enabled: false,
+            response_time: "",
+            completed_shoots: 0,
+            response_rate: 0,
+            completion_rate: 0,
+            repeat_clients: 0,
             day_rate: 0,
             portfolio_url: "",
             verified: false,
@@ -173,6 +230,27 @@ export default function CreatorDashboard() {
     const [phone, setPhone] = useState("");
     const [whatsappPhone, setWhatsappPhone] = useState("");
     const [role, setRole] = useState("");
+    const [selectedServices, setSelectedServices] = useState<string[]>([]);
+    const [selectedEventTags, setSelectedEventTags] = useState<string[]>([]);
+    const [selectedEquipmentTags, setSelectedEquipmentTags] = useState<string[]>([]);
+    const [selectedPostProductionTags, setSelectedPostProductionTags] = useState<string[]>([]);
+    const [selectedSpecializations, setSelectedSpecializations] = useState<string[]>([]);
+    const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
+    const [selectedBudgetTiers, setSelectedBudgetTiers] = useState<string[]>([]);
+    const [travelRadiusKm, setTravelRadiusKm] = useState<number | string>(0);
+    const [travelLocations, setTravelLocations] = useState("");
+    const [instantBookingEnabled, setInstantBookingEnabled] = useState(false);
+    const [availabilityDate, setAvailabilityDate] = useState("");
+    const [availabilityStatus, setAvailabilityStatus] = useState("blocked");
+    const [availabilityNotes, setAvailabilityNotes] = useState("");
+    const [serviceSearch, setServiceSearch] = useState("");
+    const [eventSearch, setEventSearch] = useState("");
+    const [equipmentTagSearch, setEquipmentTagSearch] = useState("");
+    const [postProductionTagSearch, setPostProductionTagSearch] = useState("");
+    const [openServiceCategories, setOpenServiceCategories] = useState<Record<string, boolean>>({ photography: true });
+    const [openEventCategories, setOpenEventCategories] = useState<Record<string, boolean>>({ weddings_personal: true });
+    const [openEquipmentTagCategories, setOpenEquipmentTagCategories] = useState<Record<string, boolean>>({ camera: true });
+    const [openPostProductionTagCategories, setOpenPostProductionTagCategories] = useState<Record<string, boolean>>({ post_production: true });
     const [dayRate, setDayRate] = useState<number | string>(0);
     const [portfolioUrl, setPortfolioUrl] = useState("");
     const [equipmentList, setEquipmentList] = useState("");
@@ -199,6 +277,10 @@ export default function CreatorDashboard() {
         userId ? ['creator-opportunities', userId] : null,
         fetchOpportunities
     );
+    const { data: quickBookings = [], isValidating: quickBookingsLoading, mutate: mutateQuickBookings } = useSWR<CreatorQuickBookingRequest[]>(
+        userId ? ['creator-quick-bookings', userId] : null,
+        () => listCreatorQuickBookings()
+    );
     const { data: notifications = [], mutate: mutateNotifications } = useSWR<UserNotification[]>(
         userId ? ['creator-notifications', userId] : null,
         () => listMyNotifications()
@@ -222,7 +304,20 @@ export default function CreatorDashboard() {
                 setStateName(data.state || "");
                 setPhone(data.phone || "");
                 setWhatsappPhone(data.whatsapp_phone || "");
-                setRole(data.role || "");
+                const savedServices = Array.isArray(data.service_tags) ? data.service_tags.map(String) : [];
+                const fallbackService = data.primary_service || data.role || "";
+                const nextServices = savedServices.length > 0 ? savedServices : (fallbackService ? [fallbackService] : []);
+                setSelectedServices(nextServices);
+                setSelectedEventTags(Array.isArray(data.event_tags) ? data.event_tags.map(String) : []);
+                setSelectedEquipmentTags(Array.isArray(data.equipment_tags) ? data.equipment_tags.map(String) : []);
+                setSelectedPostProductionTags(Array.isArray(data.post_production_tags) ? data.post_production_tags.map(String) : []);
+                setSelectedSpecializations(Array.isArray(data.specialization_tags) ? data.specialization_tags.map(String) : []);
+                setSelectedStyles(Array.isArray(data.style_tags) ? data.style_tags.map(String) : []);
+                setSelectedBudgetTiers(Array.isArray(data.budget_tiers) ? data.budget_tiers.map(String) : []);
+                setTravelRadiusKm(data.travel_radius_km || 0);
+                setTravelLocations(commaList(data.travel_locations));
+                setInstantBookingEnabled(Boolean(data.instant_booking_enabled));
+                setRole(fallbackService || nextServices[0] || "");
                 setDayRate(data.day_rate || 0);
                 setEquipmentList(commaList(data.equipment));
                 setTagsList(commaList(data.tags));
@@ -253,6 +348,9 @@ export default function CreatorDashboard() {
                 setUserId(user.id);
                 setCreatorType(user.user_metadata?.creator_type || null);
                 setRole((current) => current || user.user_metadata?.role || "");
+                if (user.user_metadata?.role) {
+                    setSelectedServices((current) => current.length > 0 ? current : [String(user.user_metadata?.role)]);
+                }
                 setPhone((current) => current || user.user_metadata?.phone || "");
                 setWhatsappPhone((current) => current || user.user_metadata?.whatsapp_phone || "");
                 setCity((current) => current || user.user_metadata?.city || "");
@@ -293,6 +391,16 @@ export default function CreatorDashboard() {
         });
     }
 
+    const handleQuickBookingResponse = async (bookingId: string, status: "creator_accepted" | "creator_rejected" | "more_details_requested") => {
+        const result = await respondToQuickBooking(bookingId, status);
+        if (!result.success) {
+            toast.error(result.message);
+            return;
+        }
+        toast.success(result.message);
+        mutateQuickBookings();
+    };
+
     const handleOpportunityResponse = (projectId: string, status: "interested" | "declined") => {
         const responsePromise = respondToOpportunity(projectId, status);
 
@@ -314,8 +422,8 @@ export default function CreatorDashboard() {
 
         // Mandatory field validation based on creator_type
         const cleanPhone = phone.replace(/[^\d+]/g, "");
-        if (!role) {
-            toast.error("Primary service is required.");
+        if (selectedServices.length === 0) {
+            toast.error("Select at least one service offered.");
             return;
         }
         if (!city.trim()) {
@@ -338,14 +446,27 @@ export default function CreatorDashboard() {
         }
 
         const updatePromise = new Promise(async (resolve, reject) => {
+            const primaryService = selectedServices[0] || role;
             const numDayRate = typeof dayRate === 'string' ? parseInt(dayRate) || 0 : dayRate;
             const numCapacity = typeof capacityPerDay === 'string' ? parseInt(capacityPerDay) || null : capacityPerDay || null;
             const numRadius = typeof serviceRadiusKm === 'string' ? parseInt(serviceRadiusKm) || 0 : serviceRadiusKm || 0;
+            const numTravelRadius = typeof travelRadiusKm === 'string' ? parseInt(travelRadiusKm) || 0 : travelRadiusKm || 0;
             const generatedSlug = (userEmail || `creator-${userId}`).split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + userId.slice(0, 8);
             const profilePayload = {
                 id: userId,
                 slug: generatedSlug,
-                role,
+                role: primaryService,
+                primary_service: primaryService,
+                service_tags: selectedServices,
+                event_tags: selectedEventTags,
+                equipment_tags: selectedEquipmentTags,
+                post_production_tags: selectedPostProductionTags,
+                specialization_tags: selectedSpecializations,
+                style_tags: selectedStyles,
+                travel_radius_km: numTravelRadius,
+                travel_locations: parseCommaList(travelLocations),
+                budget_tiers: selectedBudgetTiers,
+                instant_booking_enabled: instantBookingEnabled,
                 bio,
                 location: location || city,
                 city,
@@ -382,6 +503,31 @@ export default function CreatorDashboard() {
             error: (error) => error instanceof Error ? error.message : 'Failed to save profile'
         });
     }
+
+    const handleSaveAvailability = async () => {
+        if (!userId || !availabilityDate) {
+            toast.error("Choose a date first.");
+            return;
+        }
+
+        const { error } = await supabase.from("creator_availability").upsert({
+            creator_id: userId,
+            available_date: availabilityDate,
+            is_available: availabilityStatus === "available",
+            status: availabilityStatus,
+            notes: availabilityNotes || null,
+        }, { onConflict: "creator_id,available_date" });
+
+        if (error) {
+            console.error("Availability save error:", error);
+            toast.error(error.message);
+            return;
+        }
+
+        toast.success("Availability updated.");
+        setAvailabilityDate("");
+        setAvailabilityNotes("");
+    };
 
     const validatePortfolioFile = (file: File) => {
         if (!acceptedPortfolioTypes.has(file.type)) {
@@ -436,6 +582,8 @@ export default function CreatorDashboard() {
         const result = await updatePortfolioItem(item.id, {
             title: item.title || "",
             description: item.description || "",
+            event_tags: item.event_tags || [],
+            featured: item.featured,
             is_public: item.is_public,
         });
 
@@ -461,16 +609,224 @@ export default function CreatorDashboard() {
 
     const missingProfileFields = [
         !city.trim() ? "City" : null,
-        !role ? "Primary service" : null,
+        selectedServices.length === 0 ? "Services offered" : null,
+        selectedEventTags.length === 0 ? "Event types served" : null,
+        selectedSpecializations.length === 0 ? "Specialization" : null,
+        portfolioItems.length === 0 ? "Portfolio media" : null,
         !dayRate || Number(dayRate) <= 0 ? "Day rate" : null,
         !phone.trim() && !whatsappPhone.trim() ? "Phone/WhatsApp" : null,
         !availableForBooking ? "Available for booking" : null,
         !travelEnabled && parseCommaList(serviceCities).length === 0 ? "Service cities or travel enabled" : null,
     ].filter((item): item is string => Boolean(item));
 
-    const profileCompletionTotal = 7;
+    const profileCompletionTotal = 10;
     const profileCompletionPercent = Math.round(((profileCompletionTotal - missingProfileFields.length) / profileCompletionTotal) * 100);
     const unreadNotificationCount = notifications.filter((notification) => !notification.read).length;
+    const filterBookingCategories = (categories: BookingCategory[], queryValue: string) => {
+        const query = queryValue.trim().toLowerCase();
+        return categories
+            .map((category) => ({
+                ...category,
+                options: category.options.filter((option) => {
+                    return !query || option.label.toLowerCase().includes(query) || category.label.toLowerCase().includes(query);
+                }),
+            }))
+            .filter((category) => category.options.length > 0);
+    };
+
+    const filteredServiceCategories = filterBookingCategories(BOOKING_CREW_CATEGORIES, serviceSearch);
+    const filteredEventCategories = filterBookingCategories(BOOKING_EVENT_CATEGORIES, eventSearch);
+    const filteredEquipmentTagCategories = filterBookingCategories(EQUIPMENT_REQUIREMENT_CATEGORIES, equipmentTagSearch);
+    const filteredPostProductionTagCategories = filterBookingCategories(POST_PRODUCTION_CATEGORIES, postProductionTagSearch);
+
+    const toggleService = (serviceValue: string) => {
+        setSelectedServices((current) => {
+            if (current.includes(serviceValue)) {
+                const next = current.filter((service) => service !== serviceValue);
+                setRole(next[0] || "");
+                return next;
+            }
+            const next = [...current, serviceValue];
+            setRole((existing) => existing || serviceValue);
+            return next;
+        });
+    };
+
+    const toggleTag = (value: string, setter: React.Dispatch<React.SetStateAction<string[]>>) => {
+        setter((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
+    };
+
+    const selectAllInCategory = (
+        options: readonly { id: string; label: string }[],
+        setter: React.Dispatch<React.SetStateAction<string[]>>
+    ) => {
+        setter((current) => Array.from(new Set([...current, ...options.map((option) => option.id)])));
+    };
+
+    const clearCategory = (
+        options: readonly { id: string; label: string }[],
+        setter: React.Dispatch<React.SetStateAction<string[]>>
+    ) => {
+        const categoryIds = new Set(options.map((option) => option.id));
+        setter((current) => current.filter((item) => !categoryIds.has(item)));
+    };
+
+    const toggleAccordion = (
+        setter: React.Dispatch<React.SetStateAction<Record<string, boolean>>>,
+        categoryId: string,
+        keepOpen = 2
+    ) => {
+        setter((current) => {
+            const nextState = !current[categoryId];
+            if (!nextState) return { ...current, [categoryId]: false };
+            const openIds = Object.entries(current).filter(([, open]) => open).map(([id]) => id);
+            const next = { ...current, [categoryId]: true };
+            for (const id of openIds.slice(0, Math.max(0, openIds.length - keepOpen + 1))) {
+                if (id !== categoryId) next[id] = false;
+            }
+            return next;
+        });
+    };
+
+    const selectAllServicesInCategory = (services: readonly { id: string; label: string }[]) => {
+        setSelectedServices((current) => {
+            const merged = Array.from(new Set([...current, ...services.map((service) => service.id)]));
+            setRole((existing) => existing || merged[0] || "");
+            return merged;
+        });
+    };
+
+    const toggleStringTag = (value: string, setter: React.Dispatch<React.SetStateAction<string[]>>) => {
+        setter((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
+    };
+
+    const renderTagChips = (options: string[], selected: string[], setter: React.Dispatch<React.SetStateAction<string[]>>) => (
+        <div className="flex flex-wrap gap-2">
+            {options.map((option) => {
+                const active = selected.includes(option);
+                return (
+                    <button
+                        key={option}
+                        type="button"
+                        onClick={() => toggleStringTag(option, setter)}
+                        className={`rounded-full border px-4 py-2 text-sm font-bold transition-colors ${active ? "border-orange-500 bg-orange-50 text-orange-700" : "border-stone-200 bg-white text-stone-700 hover:border-orange-300"}`}
+                    >
+                        {option}
+                    </button>
+                );
+            })}
+        </div>
+    );
+
+    const selectedRecord = (values: string[]) => Object.fromEntries(values.map((value) => [value, true]));
+
+    const renderCategoryPicker = ({
+        title,
+        helper,
+        categories,
+        selected,
+        search,
+        setSearch,
+        openState,
+        setOpenState,
+        onToggle,
+        onSelectAll,
+        onClear,
+    }: {
+        title: string;
+        helper: string;
+        categories: BookingCategory[];
+        selected: string[];
+        search: string;
+        setSearch: (value: string) => void;
+        openState: Record<string, boolean>;
+        setOpenState: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+        onToggle: (value: string) => void;
+        onSelectAll: (options: BookingCategory["options"]) => void;
+        onClear: (options: BookingCategory["options"]) => void;
+    }) => (
+        <div className="rounded-2xl border border-stone-100 bg-stone-50 p-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                    <h4 className="text-sm font-black text-stone-900">{title}</h4>
+                    <p className="text-xs text-stone-500 mt-1">{helper}</p>
+                </div>
+                <input
+                    type="search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="w-full md:w-64 px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-orange-500 transition-colors"
+                    placeholder={`Search ${title.toLowerCase()}`}
+                />
+            </div>
+            {selected.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                    {selected.map((value) => (
+                        <button
+                            key={value}
+                            type="button"
+                            onClick={() => onToggle(value)}
+                            className="rounded-full bg-orange-100 px-3 py-1.5 text-xs font-black text-orange-700 hover:bg-orange-200"
+                        >
+                            {creatorServiceLabel(value)} x
+                        </button>
+                    ))}
+                </div>
+            )}
+            <div className="mt-4 space-y-3">
+                {categories.map((category) => {
+                    const isOpen = openState[category.id] ?? false;
+                    const selectedCount = getSelectedCount(category, selectedRecord(selected));
+                    const CategoryIcon = category.icon;
+                    return (
+                        <section key={category.id} className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
+                            <button
+                                type="button"
+                                onClick={() => toggleAccordion(setOpenState, category.id)}
+                                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                            >
+                                <span className="flex items-center gap-2 text-sm font-black text-stone-800">
+                                    <CategoryIcon className="h-4 w-4 text-orange-600" />
+                                    {category.label}
+                                </span>
+                                <span className="flex items-center gap-2 text-xs font-bold text-stone-500">
+                                    {selectedCount ? `${selectedCount} selected` : isOpen ? "Hide" : "Show"}
+                                    <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                                </span>
+                            </button>
+                            {isOpen && (
+                                <div className="border-t border-stone-100 p-4">
+                                    <div className="mb-3 flex gap-3">
+                                        <button type="button" onClick={() => onSelectAll(category.options)} className="text-xs font-bold text-orange-600 hover:text-orange-700">Select all</button>
+                                        <button type="button" onClick={() => onClear(category.options)} className="text-xs font-bold text-stone-500 hover:text-stone-700">Clear</button>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {category.options.map((option) => {
+                                            const checked = selected.includes(option.id);
+                                            return (
+                                                <label
+                                                    key={option.id}
+                                                    className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors cursor-pointer ${checked ? "border-orange-500 bg-orange-50 text-orange-700" : "border-stone-200 bg-white text-stone-700 hover:border-orange-200"}`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => onToggle(option.id)}
+                                                        className="h-4 w-4 accent-orange-600"
+                                                    />
+                                                    {option.label}
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </section>
+                    );
+                })}
+            </div>
+        </div>
+    );
 
     const renderSidebarContent = () => (
         <>
@@ -502,7 +858,7 @@ export default function CreatorDashboard() {
                     label="Booking Requests"
                     isActive={activeTab === "requests"}
                     onClick={() => { setActiveTab("requests"); setMobileMenuOpen(false); }}
-                    badge={(requests.filter(r => r.status === 'New Request').length + opportunities.filter(canRespondToOpportunity).length).toString()}
+                    badge={(requests.filter(r => r.status === 'New Request').length + opportunities.filter(canRespondToOpportunity).length + quickBookings.filter((booking) => booking.status === "pending_creator_acceptance").length).toString()}
                 />
                 <NavItem
                     icon={<MessageSquare className="w-5 h-5" />}
@@ -814,20 +1170,89 @@ export default function CreatorDashboard() {
                                                     />
                                                 </div>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="block text-sm font-bold text-stone-700 mb-1">
-                                                            {creatorType === 'studio_owner' ? 'Studio Services' : 'Primary Service'} <span className="text-rose-500 ml-0.5">*</span>
-                                                        </label>
-                                                        <select
-                                                            value={role}
-                                                            onChange={(e) => setRole(e.target.value)}
-                                                            className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors"
-                                                        >
-                                                            <option value="">Select service</option>
-                                                            {creatorServiceOptions.map((option) => (
-                                                                <option key={option.value} value={option.value}>{option.label}</option>
-                                                            ))}
-                                                        </select>
+                                                    <div className="md:col-span-2 space-y-5">
+                                                        <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+                                                            <p className="text-sm font-bold text-stone-800">Select the services, event types, equipment, and post-production support you can professionally provide.</p>
+                                                            <p className="mt-1 text-xs font-semibold text-stone-600">These tags help ShotcutCrew match you with the right Quick Booking clients. More accurate tags = better matching.</p>
+                                                        </div>
+                                                        <ProfileInput label="Main Service">
+                                                            <select
+                                                                value={role}
+                                                                onChange={(event) => setRole(event.target.value)}
+                                                                className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors"
+                                                            >
+                                                                <option value="">Optional headline service</option>
+                                                                {BOOKING_CREW_CATEGORIES.flatMap((category) => category.options).map((option) => (
+                                                                    <option key={option.id} value={option.id}>{option.label}</option>
+                                                                ))}
+                                                            </select>
+                                                        </ProfileInput>
+                                                        {renderCategoryPicker({
+                                                            title: "Services Offered",
+                                                            helper: `${selectedServices.length} selected. Used for crew/service matching.`,
+                                                            categories: filteredServiceCategories,
+                                                            selected: selectedServices,
+                                                            search: serviceSearch,
+                                                            setSearch: setServiceSearch,
+                                                            openState: openServiceCategories,
+                                                            setOpenState: setOpenServiceCategories,
+                                                            onToggle: toggleService,
+                                                            onSelectAll: selectAllServicesInCategory,
+                                                            onClear: (options) => clearCategory(options, setSelectedServices),
+                                                        })}
+                                                        {renderCategoryPicker({
+                                                            title: "Event Types Served",
+                                                            helper: selectedEventTags.length ? `${selectedEventTags.length} selected.` : "Recommended: select the project types you can handle.",
+                                                            categories: filteredEventCategories,
+                                                            selected: selectedEventTags,
+                                                            search: eventSearch,
+                                                            setSearch: setEventSearch,
+                                                            openState: openEventCategories,
+                                                            setOpenState: setOpenEventCategories,
+                                                            onToggle: (value) => toggleTag(value, setSelectedEventTags),
+                                                            onSelectAll: (options) => selectAllInCategory(options, setSelectedEventTags),
+                                                            onClear: (options) => clearCategory(options, setSelectedEventTags),
+                                                        })}
+                                                        {renderCategoryPicker({
+                                                            title: "Equipment Available / Supported",
+                                                            helper: "Optional. Select gear you own or can professionally support.",
+                                                            categories: filteredEquipmentTagCategories,
+                                                            selected: selectedEquipmentTags,
+                                                            search: equipmentTagSearch,
+                                                            setSearch: setEquipmentTagSearch,
+                                                            openState: openEquipmentTagCategories,
+                                                            setOpenState: setOpenEquipmentTagCategories,
+                                                            onToggle: (value) => toggleTag(value, setSelectedEquipmentTags),
+                                                            onSelectAll: (options) => selectAllInCategory(options, setSelectedEquipmentTags),
+                                                            onClear: (options) => clearCategory(options, setSelectedEquipmentTags),
+                                                        })}
+                                                        {renderCategoryPicker({
+                                                            title: "Post Production Services",
+                                                            helper: "Optional. Select editing and finishing services you provide.",
+                                                            categories: filteredPostProductionTagCategories,
+                                                            selected: selectedPostProductionTags,
+                                                            search: postProductionTagSearch,
+                                                            setSearch: setPostProductionTagSearch,
+                                                            openState: openPostProductionTagCategories,
+                                                            setOpenState: setOpenPostProductionTagCategories,
+                                                            onToggle: (value) => toggleTag(value, setSelectedPostProductionTags),
+                                                            onSelectAll: (options) => selectAllInCategory(options, setSelectedPostProductionTags),
+                                                            onClear: (options) => clearCategory(options, setSelectedPostProductionTags),
+                                                        })}
+                                                        <div className="rounded-2xl border border-stone-100 bg-stone-50 p-4 space-y-4">
+                                                            <div>
+                                                                <h4 className="text-sm font-black text-stone-900">Best Known For</h4>
+                                                                <p className="text-xs text-stone-500 mt-1">These badges help AI recommend you for the right jobs.</p>
+                                                            </div>
+                                                            {renderTagChips(specializationOptions, selectedSpecializations, setSelectedSpecializations)}
+                                                        </div>
+                                                        <div className="rounded-2xl border border-stone-100 bg-stone-50 p-4 space-y-4">
+                                                            <div>
+                                                                <h4 className="text-sm font-black text-stone-900">Production Style</h4>
+                                                                <p className="text-xs text-stone-500 mt-1">Emotional style tags improve portfolio-first matching.</p>
+                                                            </div>
+                                                            {renderTagChips(styleOptions, selectedStyles, setSelectedStyles)}
+                                                        </div>
                                                     </div>
                                                     <div>
                                                         <label className="block text-sm font-bold text-stone-700 mb-1">City <span className="text-rose-500 ml-0.5">*</span></label>
@@ -926,6 +1351,14 @@ export default function CreatorDashboard() {
                                                 <ProfileInput label="Service radius km">
                                                     <input type="number" value={serviceRadiusKm} onChange={(e) => setServiceRadiusKm(parseInt(e.target.value) || 0)} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400" placeholder="0" />
                                                 </ProfileInput>
+                                                <ProfileInput label="Travel availability">
+                                                    <select value={travelRadiusKm} onChange={(e) => setTravelRadiusKm(parseInt(e.target.value) || 0)} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors">
+                                                        {travelOptions.map((option) => <option key={option.radius} value={option.radius}>{option.label}</option>)}
+                                                    </select>
+                                                </ProfileInput>
+                                                <ProfileInput label="Preferred travel cities">
+                                                    <input type="text" value={travelLocations} onChange={(e) => setTravelLocations(e.target.value)} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400" placeholder="Bilaspur, Raipur, Mumbai" />
+                                                </ProfileInput>
                                                 <ProfileInput label="Service cities">
                                                     <input type="text" value={serviceCities} onChange={(e) => setServiceCities(e.target.value)} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500 transition-colors placeholder-stone-400" placeholder="Bilaspur, Raipur, Durg" />
                                                 </ProfileInput>
@@ -944,6 +1377,42 @@ export default function CreatorDashboard() {
                                                 <ProfileToggle label="Available for booking" checked={availableForBooking} onChange={setAvailableForBooking} />
                                                 <ProfileToggle label="Budget flexibility" checked={budgetFlexibility} onChange={setBudgetFlexibility} />
                                                 <ProfileToggle label="WhatsApp opt-in" checked={whatsappOptIn} onChange={setWhatsappOptIn} />
+                                                <ProfileToggle label="Instant booking eligible" checked={instantBookingEnabled} onChange={setInstantBookingEnabled} />
+                                            </div>
+                                            <div className="rounded-2xl border border-stone-100 bg-stone-50 p-4 space-y-3">
+                                                <h4 className="text-sm font-black text-stone-900">Preferred Project Tier</h4>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {[...budgetTierOptions, "all"].map((tier) => (
+                                                        <button
+                                                            key={tier}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (tier === "all") {
+                                                                    setSelectedBudgetTiers(budgetTierOptions);
+                                                                    return;
+                                                                }
+                                                                toggleStringTag(tier, setSelectedBudgetTiers);
+                                                            }}
+                                                            className={`rounded-full border px-4 py-2 text-sm font-bold capitalize ${selectedBudgetTiers.includes(tier) || (tier === "all" && selectedBudgetTiers.length === budgetTierOptions.length) ? "border-orange-500 bg-orange-50 text-orange-700" : "border-stone-200 bg-white text-stone-700 hover:border-orange-300"}`}
+                                                        >
+                                                            {tier}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4 space-y-3">
+                                                <h4 className="text-sm font-black text-stone-900">Availability Calendar</h4>
+                                                <div className="grid md:grid-cols-3 gap-3">
+                                                    <input type="date" value={availabilityDate} onChange={(e) => setAvailabilityDate(e.target.value)} className="px-4 py-3 bg-white border border-orange-100 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-orange-500" />
+                                                    <select value={availabilityStatus} onChange={(e) => setAvailabilityStatus(e.target.value)} className="px-4 py-3 bg-white border border-orange-100 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-orange-500">
+                                                        <option value="available">Available</option>
+                                                        <option value="blocked">Blocked</option>
+                                                        <option value="unavailable">Unavailable</option>
+                                                        <option value="vacation">Vacation</option>
+                                                    </select>
+                                                    <button type="button" onClick={handleSaveAvailability} className="rounded-xl bg-orange-600 px-4 py-3 text-sm font-black text-white hover:bg-orange-700">Save Date</button>
+                                                </div>
+                                                <input type="text" value={availabilityNotes} onChange={(e) => setAvailabilityNotes(e.target.value)} className="w-full px-4 py-3 bg-white border border-orange-100 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-orange-500" placeholder="Notes, e.g. outstation shoot or available after 4 PM" />
                                             </div>
                                         </section>
 
@@ -1040,19 +1509,36 @@ export default function CreatorDashboard() {
                                                                     placeholder="Description"
                                                                 />
                                                                 <div className="flex items-center justify-between">
-                                                                    <label className="flex items-center gap-2 text-xs font-semibold text-stone-600">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={item.is_public}
-                                                                            onChange={(event) => setPortfolioItems((items) => items.map((current) => current.id === item.id ? { ...current, is_public: event.target.checked } : current))}
-                                                                            className="accent-rose-600"
-                                                                        />
-                                                                        Public
-                                                                    </label>
+                                                                    <div className="flex flex-wrap gap-3">
+                                                                        <label className="flex items-center gap-2 text-xs font-semibold text-stone-600">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={item.is_public}
+                                                                                onChange={(event) => setPortfolioItems((items) => items.map((current) => current.id === item.id ? { ...current, is_public: event.target.checked } : current))}
+                                                                                className="accent-rose-600"
+                                                                            />
+                                                                            Public
+                                                                        </label>
+                                                                        <label className="flex items-center gap-2 text-xs font-semibold text-stone-600">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={item.featured}
+                                                                                onChange={(event) => setPortfolioItems((items) => items.map((current) => current.id === item.id ? { ...current, featured: event.target.checked } : event.target.checked ? { ...current, featured: false } : current))}
+                                                                                className="accent-orange-600"
+                                                                            />
+                                                                            Featured Work
+                                                                        </label>
+                                                                    </div>
                                                                     <button type="button" onClick={() => handlePortfolioItemUpdate(item)} className="rounded-xl bg-stone-900 px-3 py-2 text-xs font-bold text-white hover:bg-stone-800">
                                                                         Save Item
                                                                     </button>
                                                                 </div>
+                                                                <input
+                                                                    value={commaList(item.event_tags)}
+                                                                    onChange={(event) => setPortfolioItems((items) => items.map((current) => current.id === item.id ? { ...current, event_tags: parseCommaList(event.target.value) } : current))}
+                                                                    className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:border-rose-500"
+                                                                    placeholder="Event tags: wedding, product shoot, music video"
+                                                                />
                                                             </div>
                                                         </div>
                                                     ))}
@@ -1085,6 +1571,18 @@ export default function CreatorDashboard() {
                                                 <p className="text-xs font-semibold text-rose-700 bg-white/70 rounded-xl p-3 mt-4">You are currently unavailable for new booking invites.</p>
                                             )}
                                         </div>
+                                        <div className="bg-white p-6 rounded-3xl border border-stone-100 shadow-sm">
+                                            <h4 className="font-bold text-stone-900 mb-4">Trust & Marketplace Signals</h4>
+                                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                                <div className="rounded-2xl bg-stone-50 p-3"><span className="block text-stone-500">Verification</span><b>{profile?.verified ? "Verified" : "Under review"}</b></div>
+                                                <div className="rounded-2xl bg-stone-50 p-3"><span className="block text-stone-500">Completed shoots</span><b>{profile?.completed_shoots || 0}</b></div>
+                                                <div className="rounded-2xl bg-stone-50 p-3"><span className="block text-stone-500">Response time</span><b>{profile?.response_time || "Not tracked"}</b></div>
+                                                <div className="rounded-2xl bg-stone-50 p-3"><span className="block text-stone-500">Repeat clients</span><b>{profile?.repeat_clients || 0}</b></div>
+                                                <div className="rounded-2xl bg-stone-50 p-3"><span className="block text-stone-500">Response rate</span><b>{Number(profile?.response_rate || 0)}%</b></div>
+                                                <div className="rounded-2xl bg-stone-50 p-3"><span className="block text-stone-500">Completion rate</span><b>{Number(profile?.completion_rate || 0)}%</b></div>
+                                            </div>
+                                            <p className="mt-4 text-xs text-stone-500">These signals improve marketplace trust and AI recommendation quality as real booking history grows.</p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1092,6 +1590,43 @@ export default function CreatorDashboard() {
 
                         {activeTab === "requests" && (
                             <div className="space-y-8">
+                                <section>
+                                    <h2 className="text-xl font-bold text-stone-900 font-display mb-4">Quick Booking Requests</h2>
+                                    {quickBookingsLoading ? (
+                                        <div className="text-center py-10 bg-white rounded-2xl border border-stone-100">
+                                            <div className="w-8 h-8 rounded-full border-4 border-orange-200 border-t-orange-600 animate-spin mx-auto mb-4"></div>
+                                            <p className="text-stone-500 font-medium">Loading quick bookings...</p>
+                                        </div>
+                                    ) : quickBookings.length === 0 ? (
+                                        <div className="bg-white rounded-2xl border border-stone-100 p-6 text-stone-500 font-medium">No quick booking requests yet.</div>
+                                    ) : (
+                                        <div className="grid lg:grid-cols-2 gap-4">
+                                            {quickBookings.map((booking) => (
+                                                <div key={booking.id} className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm hover:border-orange-200 transition-all">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <h3 className="font-black text-stone-900">{booking.event_type}</h3>
+                                                            <p className="text-sm text-stone-500 mt-1">{booking.client_name} · {booking.city}</p>
+                                                        </div>
+                                                        <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-700">{booking.status.replace(/_/g, " ")}</span>
+                                                    </div>
+                                                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                                        <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Date</span><b>{new Date(booking.shoot_date).toLocaleDateString()} {booking.shoot_time}</b></div>
+                                                        <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Budget tier</span><b className="capitalize">{booking.budget_tier || "standard"}</b></div>
+                                                    </div>
+                                                    <p className="mt-4 text-sm text-stone-600">{booking.location_address}</p>
+                                                    {booking.status === "pending_creator_acceptance" && (
+                                                        <div className="mt-5 grid sm:grid-cols-3 gap-2">
+                                                            <button onClick={() => handleQuickBookingResponse(booking.id, "creator_accepted")} className="rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700">Accept</button>
+                                                            <button onClick={() => handleQuickBookingResponse(booking.id, "more_details_requested")} className="rounded-xl border border-stone-200 py-2.5 text-sm font-bold text-stone-700 hover:bg-stone-50">More Details</button>
+                                                            <button onClick={() => handleQuickBookingResponse(booking.id, "creator_rejected")} className="rounded-xl bg-rose-50 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-100">Reject</button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </section>
                                 <OpportunitySection
                                     opportunities={opportunities}
                                     loading={opportunitiesLoading}

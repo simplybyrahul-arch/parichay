@@ -11,6 +11,8 @@ export type PortfolioItem = {
     media_type: "image" | "video";
     title: string | null;
     description: string | null;
+    event_tags: string[];
+    featured: boolean;
     sort_order: number;
     is_public: boolean;
     created_at: string;
@@ -92,7 +94,7 @@ export async function listMyPortfolioItems(): Promise<PortfolioItem[]> {
     const admin = createAdminClient();
     const { data, error } = await admin
         .from("portfolio_items")
-        .select("id, creator_id, media_url, media_type, title, description, sort_order, is_public, created_at")
+        .select("id, creator_id, media_url, media_type, title, description, event_tags, featured, sort_order, is_public, created_at")
         .eq("creator_id", auth.creatorId)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false });
@@ -143,10 +145,12 @@ export async function uploadPortfolioMedia(formData: FormData): Promise<ActionRe
             media_url: publicUrl.publicUrl,
             media_type: mediaType,
             title: file.name.replace(/\.[^/.]+$/, ""),
+            event_tags: [],
+            featured: false,
             sort_order: 0,
             is_public: true,
         })
-        .select("id, creator_id, media_url, media_type, title, description, sort_order, is_public, created_at")
+        .select("id, creator_id, media_url, media_type, title, description, event_tags, featured, sort_order, is_public, created_at")
         .single();
 
     if (insertError || !item) {
@@ -159,16 +163,25 @@ export async function uploadPortfolioMedia(formData: FormData): Promise<ActionRe
     return { success: true, message: "Media uploaded.", item: item as PortfolioItem };
 }
 
-export async function updatePortfolioItem(itemId: string, values: { title?: string; description?: string; is_public?: boolean }): Promise<ActionResult> {
+export async function updatePortfolioItem(itemId: string, values: { title?: string; description?: string; is_public?: boolean; event_tags?: string[]; featured?: boolean }): Promise<ActionResult> {
     const auth = await getCreatorId();
     if (!auth.creatorId) return { success: false, message: auth.error || "Unauthorized." };
 
     const admin = createAdminClient();
+    if (values.featured) {
+        await admin
+            .from("portfolio_items")
+            .update({ featured: false })
+            .eq("creator_id", auth.creatorId);
+    }
+
     const { error } = await admin
         .from("portfolio_items")
         .update({
             title: values.title?.trim() || null,
             description: values.description?.trim() || null,
+            event_tags: Array.isArray(values.event_tags) ? values.event_tags : [],
+            featured: Boolean(values.featured),
             is_public: values.is_public !== false,
         })
         .eq("id", itemId)
