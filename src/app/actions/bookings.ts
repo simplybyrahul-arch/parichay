@@ -19,6 +19,10 @@ export type CreateBookingInput = {
     budget: number;
     title: string;
     description: string;
+    initialStatus?: "receiving_interest" | "submitted" | "pending_review" | "open_for_quotes" | "checking_availability";
+    notificationType?: string;
+    notificationTitle?: string;
+    notificationMessage?: string;
 };
 
 type CreateBookingResult = {
@@ -67,7 +71,7 @@ function validateBookingInput(input: CreateBookingInput) {
         throw new Error("Booking description is required.");
     }
 
-    if (!Number.isFinite(budget) || budget <= 0) {
+    if (!Number.isFinite(budget) || budget < 0) {
         throw new Error("A valid booking budget is required.");
     }
 
@@ -105,10 +109,16 @@ function validateBookingInput(input: CreateBookingInput) {
         budget,
         title,
         description,
+        initialStatus: input.initialStatus || "receiving_interest",
+        notificationType: input.notificationType || "booking_opportunity",
+        notificationTitle: input.notificationTitle || "New booking opportunity",
+        notificationMessage: input.notificationMessage?.trim() || null,
     };
 }
 
 function formatNotificationMessage(input: ReturnType<typeof validateBookingInput>) {
+    if (input.notificationMessage) return input.notificationMessage;
+
     const parts = [
         input.bookingType.replace(/_/g, " "),
         input.bookingLocation ? `in ${input.bookingLocation}` : null,
@@ -150,7 +160,7 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
                 title: booking.title,
                 description: booking.description,
                 budget: booking.budget,
-                status: "receiving_interest",
+                status: booking.initialStatus,
                 payment_status: "not_required",
                 booking_type: booking.bookingType,
                 booking_location: booking.bookingLocation,
@@ -224,8 +234,8 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
                     user_id: match.creatorId,
                     project_id: project.id,
                     creator_id: match.creatorId,
-                    type: "booking_opportunity",
-                    title: "New booking opportunity",
+                    type: booking.notificationType,
+                    title: booking.notificationTitle,
                     message: notificationMessage,
                     data: {
                         project_id: project.id,

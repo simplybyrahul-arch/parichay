@@ -34,6 +34,12 @@ import {
     getEquipmentItemById,
     getRecommendedEquipment,
 } from "@/lib/bookings/equipmentCatalog";
+import {
+    buildProjectRequirementSummary,
+    findEventTypeFromText,
+    formatRequirementLabels,
+    mapBudgetTierToPlanningBudget,
+} from "@/lib/bookings/bookingPayload";
 import type { ScriptAnalysisResult } from "@/lib/ai/scriptAnalysis";
 import type { BudgetTier } from "@/config/bookingOptions";
 
@@ -60,6 +66,28 @@ export default function BookingFlow() {
     // ====== BUILDER MODE STATE ======
     const [crew, setCrew] = useState<Array<{ id: string, name: string, rate: number, count: number }>>([]);
     const [days, setDays] = useState(1);
+    const [projectTitle, setProjectTitle] = useState("");
+    const [projectEventType, setProjectEventType] = useState("");
+    const [projectCustomEventType, setProjectCustomEventType] = useState("");
+    const [projectDescription, setProjectDescription] = useState("");
+    const [projectObjective, setProjectObjective] = useState("");
+    const [projectAudience, setProjectAudience] = useState("");
+    const [projectDeliverables, setProjectDeliverables] = useState("");
+    const [projectStyle, setProjectStyle] = useState("");
+    const [projectReferenceLinks, setProjectReferenceLinks] = useState("");
+    const [projectLocation, setProjectLocation] = useState("");
+    const [projectDate, setProjectDate] = useState("");
+    const [projectFlexibleDate, setProjectFlexibleDate] = useState(false);
+    const [projectTravelNeeded, setProjectTravelNeeded] = useState(false);
+    const [projectBudgetTier, setProjectBudgetTier] = useState<BudgetTier | "guidance">("standard");
+    const [projectBudgetAmount, setProjectBudgetAmount] = useState("");
+    const [projectPriority, setProjectPriority] = useState("balanced");
+    const [projectEquipmentRequirements, setProjectEquipmentRequirements] = useState<Record<string, boolean>>({});
+    const [projectPostRequirements, setProjectPostRequirements] = useState<Record<string, boolean>>({});
+    const [openBuilderSections, setOpenBuilderSections] = useState<Record<string, boolean>>({
+        overview: true,
+        scope: true,
+    });
 
     const availableRoles = BOOKING_CREW_CATEGORIES.flatMap((category) => category.options).map((role) => ({
         id: role.id,
@@ -97,6 +125,14 @@ export default function BookingFlow() {
 
     const [equipment, setEquipment] = useState<Array<{ id: string, name: string, rate: number, count: number }>>([]);
     const [equipDays, setEquipDays] = useState(1);
+    const [equipmentStartDate, setEquipmentStartDate] = useState("");
+    const [equipmentEndDate, setEquipmentEndDate] = useState("");
+    const [equipmentLocation, setEquipmentLocation] = useState("");
+    const [equipmentDeliveryNeeded, setEquipmentDeliveryNeeded] = useState(true);
+    const [equipmentPickupNeeded, setEquipmentPickupNeeded] = useState(false);
+    const [equipmentOperatorNeeded, setEquipmentOperatorNeeded] = useState(false);
+    const [equipmentNotes, setEquipmentNotes] = useState("");
+    const [equipmentReferenceLinks, setEquipmentReferenceLinks] = useState("");
     const [equipmentSearch, setEquipmentSearch] = useState("");
     const [activeEquipmentCategory, setActiveEquipmentCategory] = useState("all");
     const [openEquipmentCategories, setOpenEquipmentCategories] = useState<Record<string, boolean>>({
@@ -447,7 +483,7 @@ export default function BookingFlow() {
         customBudgetAmount: customBudgetAmount ? Number(customBudgetAmount) : null,
     });
 
-    const applyScriptAnalysisToBooking = () => {
+    const getAnalysisRequirementMaps = () => {
         if (!analysisResult) return;
 
         const crewFromAnalysis: Record<string, number> = {};
@@ -467,13 +503,56 @@ export default function BookingFlow() {
             if (matchedEquipment) equipmentFromAnalysis[matchedEquipment.id] = true;
         }
 
-        setSelectedEventType(CUSTOM_EVENT_TYPE_ID);
-        setCustomEventType(analysisResult.detected_project_type || "Custom Requirement");
-        if (Object.keys(crewFromAnalysis).length > 0) setCrewRequirements(crewFromAnalysis);
-        if (Object.keys(equipmentFromAnalysis).length > 0) setEquipmentRequirements(equipmentFromAnalysis);
-        setMode("quick");
-        setStep(2);
-        toast.success("Recommendations applied to your booking draft.");
+        return { crewFromAnalysis, equipmentFromAnalysis };
+    };
+
+    const applyScriptAnalysisToBooking = (destination: "quick" | "builder" | "equipment") => {
+        if (!analysisResult) return;
+
+        const maps = getAnalysisRequirementMaps();
+        if (!maps) return;
+        const eventTypeFromAnalysis = findEventTypeFromText(analysisResult.detected_project_type);
+
+        setSelectedEventType(eventTypeFromAnalysis);
+        setCustomEventType(eventTypeFromAnalysis === CUSTOM_EVENT_TYPE_ID ? analysisResult.detected_project_type || "Custom Requirement" : "");
+        setProjectEventType(eventTypeFromAnalysis);
+        setProjectCustomEventType(eventTypeFromAnalysis === CUSTOM_EVENT_TYPE_ID ? analysisResult.detected_project_type || "Custom Requirement" : "");
+        if (Object.keys(maps.crewFromAnalysis).length > 0) {
+            setCrewRequirements(maps.crewFromAnalysis);
+            const nextCrew = BOOKING_CREW_CATEGORIES.flatMap((category) => category.options)
+                .filter((role) => maps.crewFromAnalysis[role.id])
+                .map((role) => ({ id: role.id, name: role.label, rate: 0, count: maps.crewFromAnalysis[role.id] }));
+            setCrew(nextCrew);
+        }
+        if (Object.keys(maps.equipmentFromAnalysis).length > 0) {
+            setEquipmentRequirements(maps.equipmentFromAnalysis);
+            setProjectEquipmentRequirements(maps.equipmentFromAnalysis);
+            const nextEquipment = Object.keys(maps.equipmentFromAnalysis)
+                .map((id) => getEquipmentItemById(id))
+                .filter((item): item is NonNullable<ReturnType<typeof getEquipmentItemById>> => Boolean(item))
+                .map((item) => ({ id: item.id, name: item.name, rate: item.pricePerDay, count: 1 }));
+            if (nextEquipment.length) setEquipment(nextEquipment);
+        }
+
+        setProjectTitle(analysisResult.detected_project_type || "Production Requirement");
+        setProjectDescription(analysisResult.project_summary);
+        setProjectDeliverables(analysisResult.production_checklist.join("\n"));
+
+        if (destination === "quick") {
+            setMode("quick");
+            setStep(2);
+            toast.success("Recommendations applied to Quick Booking.");
+            return;
+        }
+
+        if (destination === "equipment") {
+            setMode("equipment");
+            toast.success("Equipment recommendations applied to rental request.");
+            return;
+        }
+
+        setMode("builder");
+        toast.success("Recommendations applied to Custom Project RFQ.");
     };
 
 
@@ -481,27 +560,66 @@ export default function BookingFlow() {
 
     const handleBuilderBooking = async () => {
         if (!clientId) {
-            toast.error("You must be logged in to request a crew.");
+            toast.error("You must be logged in to submit a project requirement.");
             router.push('/login');
             return;
         }
+        if (!projectTitle.trim() || !projectDescription.trim()) {
+            toast.error("Please add a project title and brief.");
+            return;
+        }
+        if (!projectEventType) {
+            toast.error("Please choose a project type.");
+            return;
+        }
         setIsSubmitting(true);
-        const description = `Custom Crew Build | Duration: ${days} days | Roles: ${crew.map(c => `${c.count}x ${c.name}`).join(', ')}`;
         const builderCrewRequirements = Object.fromEntries(crew.map((member) => [member.id, member.count]));
+        const budgetAmount = mapBudgetTierToPlanningBudget(projectBudgetTier, projectBudgetAmount ? Number(projectBudgetAmount) : null);
+        const description = buildProjectRequirementSummary({
+            eventType: projectEventType,
+            customEventType: projectCustomEventType,
+            description: [
+                projectDescription,
+                projectObjective ? `Objective: ${projectObjective}` : null,
+                projectAudience ? `Audience/use case: ${projectAudience}` : null,
+                projectDeliverables ? `Deliverables: ${projectDeliverables}` : null,
+                projectStyle ? `Style/mood: ${projectStyle}` : null,
+                projectReferenceLinks ? `References: ${projectReferenceLinks}` : null,
+                `Budget tier: ${projectBudgetTier}`,
+                `Priority: ${projectPriority}`,
+                projectFlexibleDate ? "Date flexibility: flexible" : null,
+                projectTravelNeeded ? "Travel/multiple-location support may be needed" : null,
+            ].filter(Boolean).join("\n"),
+            crewRequirements: builderCrewRequirements,
+            equipmentRequirements: projectEquipmentRequirements,
+            postProductionRequirements: projectPostRequirements,
+            location: projectLocation,
+            days,
+        });
         try {
             const result = await createBooking({
                 bookingType: "production_crew",
-                title: "Custom Crew Request",
+                title: projectTitle.trim(),
                 description,
                 requirementSummary: description,
-                budget: grandTotal,
+                budget: budgetAmount,
                 estimatedDays: days,
+                eventDate: projectDate || null,
+                eventType: projectEventType,
+                customEventType: projectEventType === CUSTOM_EVENT_TYPE_ID ? projectCustomEventType : null,
+                bookingLocation: projectLocation || null,
                 crewRequirements: builderCrewRequirements,
+                equipmentRequirements: projectEquipmentRequirements,
+                postProductionRequirements: projectPostRequirements,
+                initialStatus: "open_for_quotes",
+                notificationType: "project_rfq",
+                notificationTitle: "New project RFQ available",
+                notificationMessage: "A client submitted a custom production requirement. Submit interest or quote if it fits your services.",
             });
             if (!result.success) {
                 throw new Error(result.message);
             }
-            toast.success(`${result.message} ${result.match_count || 0} creator(s) matched.`);
+            toast.success(`Project requirement submitted. ${result.match_count || 0} creator(s) notified for RFQ.`);
             router.push('/dashboard');
         } catch (error: unknown) {
             toast.error((error as Error).message || "Failed to submit request.");
@@ -515,23 +633,48 @@ export default function BookingFlow() {
             router.push('/login');
             return;
         }
+        if (equipment.length === 0) {
+            toast.error("Please choose at least one equipment item.");
+            return;
+        }
+        if (!equipmentStartDate || !equipmentLocation.trim()) {
+            toast.error("Please add rental start date and location.");
+            return;
+        }
         setIsSubmitting(true);
-        const description = `Equipment Booking | Duration: ${equipDays} days | Items: ${equipment.map(e => `${e.count}x ${e.name}`).join(', ')}`;
+        const description = [
+            "Equipment rental request",
+            `Rental dates: ${equipmentStartDate}${equipmentEndDate ? ` to ${equipmentEndDate}` : ""}`,
+            `Duration: ${equipDays} day(s)`,
+            `Location: ${equipmentLocation}`,
+            `Delivery needed: ${equipmentDeliveryNeeded ? "Yes" : "No"}`,
+            `Pickup option: ${equipmentPickupNeeded ? "Yes" : "No"}`,
+            `Operator required: ${equipmentOperatorNeeded ? "Yes" : "No"}`,
+            `Items: ${equipment.map(e => `${e.count}x ${e.name}`).join(', ')}`,
+            equipmentNotes ? `Notes: ${equipmentNotes}` : null,
+            equipmentReferenceLinks ? `References: ${equipmentReferenceLinks}` : null,
+        ].filter(Boolean).join("\n");
         const equipmentRequestCounts = Object.fromEntries(equipment.map((item) => [item.id, item.count]));
         try {
             const result = await createBooking({
                 bookingType: "equipment",
-                title: "Equipment Booking Request",
+                title: "Equipment Rental Request",
                 description,
                 requirementSummary: description,
-                budget: equipGrandTotal,
+                budget: 25000,
                 estimatedDays: equipDays,
+                eventDate: equipmentStartDate,
+                bookingLocation: equipmentLocation,
                 equipmentRequirements: equipmentRequestCounts,
+                initialStatus: "checking_availability",
+                notificationType: "equipment_rental_request",
+                notificationTitle: "New equipment rental request",
+                notificationMessage: "A client needs equipment availability and rental quotes for an upcoming shoot.",
             });
             if (!result.success) {
                 throw new Error(result.message);
             }
-            toast.success(`${result.message} ${result.match_count || 0} creator(s) matched.`);
+            toast.success(`Rental request submitted. ${result.match_count || 0} provider(s) notified for availability.`);
             router.push('/dashboard');
         } catch (error: unknown) {
             toast.error((error as Error).message || "Failed to submit equipment request.");
@@ -667,7 +810,7 @@ export default function BookingFlow() {
                                         <Zap className="w-6 h-6" />
                                     </div>
                                     <h3 className="text-xl font-black text-stone-900 mb-2 font-display">Quick Booking</h3>
-                                    <p className="text-stone-600 font-medium mb-6 flex-grow text-sm">Hire a photographer, videographer, or editor instantly with AI matching.</p>
+                                    <p className="text-stone-600 font-medium mb-6 flex-grow text-sm">Fast creator discovery for simple shoots. Find matches and select a creator quickly.</p>
                                     <div className="flex items-center text-orange-600 font-bold gap-2 text-sm group-hover:gap-3 transition-all">
                                         Start <ArrowRight className="w-4 h-4" />
                                     </div>
@@ -681,8 +824,8 @@ export default function BookingFlow() {
                                     <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mb-5">
                                         <Settings className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-xl font-black text-stone-900 mb-2 font-display">Builder Mode</h3>
-                                    <p className="text-stone-600 font-medium mb-6 flex-grow text-sm">Hand-pick specific roles for your full production crew with real-time budget estimates.</p>
+                                    <h3 className="text-xl font-black text-stone-900 mb-2 font-display">Custom Project</h3>
+                                    <p className="text-stone-600 font-medium mb-6 flex-grow text-sm">Build a professional RFQ for larger productions and receive quotes or interests later.</p>
                                     <div className="flex items-center text-rose-600 font-bold gap-2 text-sm group-hover:gap-3 transition-all">
                                         Start <ArrowRight className="w-4 h-4" />
                                     </div>
@@ -696,8 +839,8 @@ export default function BookingFlow() {
                                     <div className="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center mb-5">
                                         <Package className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-xl font-black text-stone-900 mb-2 font-display">Book Equipment</h3>
-                                    <p className="text-stone-600 font-medium mb-6 flex-grow text-sm">Rent cameras, lights, audio gear, gimbals, and accessories for your shoot.</p>
+                                    <h3 className="text-xl font-black text-stone-900 mb-2 font-display">Equipment Rental</h3>
+                                    <p className="text-stone-600 font-medium mb-6 flex-grow text-sm">Request camera, lighting, drone, audio, or broadcast gear availability and quotes.</p>
                                     <div className="flex items-center text-violet-600 font-bold gap-2 text-sm group-hover:gap-3 transition-all">
                                         Start <ArrowRight className="w-4 h-4" />
                                     </div>
@@ -711,7 +854,7 @@ export default function BookingFlow() {
                                     <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-5">
                                         <FileText className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-xl font-black text-stone-900 mb-2 font-display">Analyze Script</h3>
+                                    <h3 className="text-xl font-black text-stone-900 mb-2 font-display">AI Planner</h3>
                                     <p className="text-stone-600 font-medium mb-6 flex-grow text-sm">Upload or paste your script — AI recommends crew, gear, and production requirements.</p>
                                     <div className="flex items-center text-emerald-600 font-bold gap-2 text-sm group-hover:gap-3 transition-all">
                                         Start <ArrowRight className="w-4 h-4" />
@@ -1297,8 +1440,159 @@ export default function BookingFlow() {
                     )}
 
 
-                    {/* ====== BUILDER MODE FLOW ====== */}
+                    {/* ====== CUSTOM PROJECT / PRODUCTION RFQ FLOW ====== */}
                     {mode === "builder" && (
+                        <motion.div
+                            key="builder-rfq"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            className="w-full grid lg:grid-cols-[260px_1fr] gap-8"
+                        >
+                            <aside className="hidden lg:block">
+                                <div className="sticky top-24 rounded-[2rem] border border-rose-100 bg-white p-5 shadow-xl shadow-stone-200/50">
+                                    {["Project Overview", "Production Scope", "Creative Direction", "Schedule & Location", "Budget & Priority", "Review RFQ"].map((item, index) => (
+                                        <div key={item} className="flex gap-3 border-l-2 border-rose-100 pb-5 pl-4 last:pb-0">
+                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-50 text-xs font-black text-rose-600">{index + 1}</span>
+                                            <span className="text-sm font-bold text-stone-700">{item}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </aside>
+
+                            <div className="space-y-6">
+                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
+                                    <p className="mb-2 text-sm font-black uppercase tracking-wide text-rose-600">Custom Project / Production Builder</p>
+                                    <h2 className="text-3xl font-black text-stone-900 mb-2 font-display">Build your production brief</h2>
+                                    <p className="text-stone-500 mb-8">Submit a professional RFQ. Creators and production teams can show interest or quote, and you choose later.</p>
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <input value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} placeholder="Project title, e.g. Brand launch film" className="md:col-span-2 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" />
+                                        <select value={projectEventType} onChange={(event) => setProjectEventType(event.target.value)} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500">
+                                            <option value="">Choose project type</option>
+                                            {BOOKING_EVENT_CATEGORIES.map((category) => (
+                                                <optgroup key={category.id} label={category.label}>
+                                                    {category.options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                                                </optgroup>
+                                            ))}
+                                        </select>
+                                        <input value={projectEventType === CUSTOM_EVENT_TYPE_ID ? projectCustomEventType : projectObjective} onChange={(event) => projectEventType === CUSTOM_EVENT_TYPE_ID ? setProjectCustomEventType(event.target.value) : setProjectObjective(event.target.value)} placeholder={projectEventType === CUSTOM_EVENT_TYPE_ID ? "Describe project type" : "Objective / goal"} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" />
+                                        <textarea value={projectDescription} onChange={(event) => setProjectDescription(event.target.value)} rows={4} placeholder="Describe the project, expected output, brand/event context, and must-have details." className="md:col-span-2 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" />
+                                        <input value={projectAudience} onChange={(event) => setProjectAudience(event.target.value)} placeholder="Target audience / use case" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" />
+                                        <input value={projectDeliverables} onChange={(event) => setProjectDeliverables(event.target.value)} placeholder="Deliverables, e.g. 1 ad film, 5 reels, 20 photos" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" />
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
+                                    <div className="flex items-center justify-between gap-3 mb-6">
+                                        <div>
+                                            <h3 className="text-xl font-bold text-stone-900 font-display">Production scope</h3>
+                                            <p className="text-sm text-stone-500">Add crew, equipment, and post-production requirements if known.</p>
+                                        </div>
+                                        <button type="button" onClick={() => setOpenBuilderSections((current) => ({ ...current, scope: !current.scope }))} className="rounded-full bg-rose-50 px-4 py-2 text-sm font-black text-rose-600">{openBuilderSections.scope ? "Hide" : "Show"}</button>
+                                    </div>
+                                    {openBuilderSections.scope && (
+                                        <div className="space-y-5">
+                                            {BOOKING_CREW_CATEGORIES.map((category) => {
+                                                const selected = crew.filter((member) => category.options.some((role) => role.id === member.id)).length;
+                                                return (
+                                                    <section key={category.id} className="rounded-2xl border border-stone-200 bg-stone-50 overflow-hidden">
+                                                        <button type="button" onClick={() => toggleAccordion(setOpenCrewCategories, category.id, 2)} className="flex w-full items-center justify-between px-5 py-4 text-left">
+                                                            <span className="font-black text-stone-900">{category.label}{selected ? ` · ${selected} selected` : ""}</span>
+                                                            <span className="text-sm font-bold text-stone-500">{openCrewCategories[category.id] ? "Hide" : "Show"}</span>
+                                                        </button>
+                                                        {openCrewCategories[category.id] && (
+                                                            <div className="grid md:grid-cols-2 gap-3 p-4 pt-0">
+                                                                {category.options.map((role) => {
+                                                                    const selectedRole = crew.find((member) => member.id === role.id);
+                                                                    return (
+                                                                        <div key={role.id} className={`rounded-2xl border p-4 ${selectedRole ? "border-rose-400 bg-rose-50" : "border-stone-200 bg-white"}`}>
+                                                                            <div className="flex items-start justify-between gap-4">
+                                                                                <div>
+                                                                                    <h4 className="font-black text-stone-900">{role.label}</h4>
+                                                                                    <p className="mt-1 text-sm text-stone-500">{role.description}</p>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-2 py-1">
+                                                                                    <button aria-label={`Decrease ${role.label}`} onClick={() => handleRemoveRole(role.id)} className="p-2 text-stone-500 disabled:opacity-40" disabled={!selectedRole}><Minus className="w-4 h-4" /></button>
+                                                                                    <span className="w-6 text-center font-black">{selectedRole?.count || 0}</span>
+                                                                                    <button aria-label={`Increase ${role.label}`} onClick={() => handleAddRole({ id: role.id, name: role.label, rate: 0 })} className="p-2 text-rose-600"><Plus className="w-4 h-4" /></button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </section>
+                                                );
+                                            })}
+                                            <RequirementChipGroups title="Equipment requirements" categories={EQUIPMENT_REQUIREMENT_CATEGORIES} selected={projectEquipmentRequirements} onToggle={(id) => toggleRequirement(setProjectEquipmentRequirements, id)} />
+                                            <RequirementChipGroups title="Post-production requirements" categories={POST_PRODUCTION_CATEGORIES} selected={projectPostRequirements} onToggle={(id) => toggleRequirement(setProjectPostRequirements, id)} />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
+                                    <h3 className="text-xl font-bold text-stone-900 font-display mb-5">Creative direction</h3>
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <select value={projectStyle} onChange={(event) => setProjectStyle(event.target.value)} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500">
+                                            <option value="">Style / mood</option>
+                                            {["cinematic", "documentary", "luxury", "corporate", "social media", "traditional", "fashion editorial"].map((style) => <option key={style} value={style}>{style}</option>)}
+                                        </select>
+                                        <input value={projectReferenceLinks} onChange={(event) => setProjectReferenceLinks(event.target.value)} placeholder="Reference links / brand guidelines URL" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500" />
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
+                                    <h3 className="text-xl font-bold text-stone-900 font-display mb-5">Schedule & location</h3>
+                                    <div className="grid md:grid-cols-3 gap-4">
+                                        <input type="date" value={projectDate} onChange={(event) => setProjectDate(event.target.value)} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500" />
+                                        <input type="number" min={1} value={days} onChange={(event) => setDays(Math.max(1, Number(event.target.value || 1)))} placeholder="Shoot days" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500" />
+                                        <input value={projectLocation} onChange={(event) => setProjectLocation(event.target.value)} placeholder="Location / multiple locations" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500" />
+                                        <label className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm font-bold text-stone-700"><input type="checkbox" checked={projectFlexibleDate} onChange={(event) => setProjectFlexibleDate(event.target.checked)} /> Flexible date</label>
+                                        <label className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm font-bold text-stone-700"><input type="checkbox" checked={projectTravelNeeded} onChange={(event) => setProjectTravelNeeded(event.target.checked)} /> Travel needed</label>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
+                                    <h3 className="text-xl font-bold text-stone-900 font-display mb-5">Budget & priority</h3>
+                                    <div className="grid md:grid-cols-4 gap-3">
+                                        {[...BUDGET_TIER_OPTIONS, { id: "guidance", label: "Need Guidance", description: "Let teams advise scope" }].map((tier) => (
+                                            <button key={tier.id} type="button" onClick={() => setProjectBudgetTier(tier.id as BudgetTier | "guidance")} className={`rounded-2xl border p-4 text-left ${projectBudgetTier === tier.id ? "border-rose-500 bg-rose-50" : "border-stone-200 bg-stone-50"}`}>
+                                                <div className="font-black text-stone-900">{tier.label}</div>
+                                                <p className="mt-1 text-xs text-stone-500">{tier.description}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="mt-4 grid md:grid-cols-2 gap-4">
+                                        <input type="number" value={projectBudgetAmount} onChange={(event) => setProjectBudgetAmount(event.target.value)} placeholder="Optional budget amount" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500" />
+                                        <select value={projectPriority} onChange={(event) => setProjectPriority(event.target.value)} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500">
+                                            <option value="lowest_cost">Lowest cost</option>
+                                            <option value="balanced">Balanced</option>
+                                            <option value="best_quality">Best quality</option>
+                                            <option value="fastest_delivery">Fastest delivery</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-[2rem] border border-rose-100 bg-rose-50 p-8">
+                                    <h3 className="text-xl font-black text-stone-900 font-display">Review & submit RFQ</h3>
+                                    <p className="mt-2 text-sm text-stone-600">No creator is auto-selected. Verified creators and production teams can show interest or quote, and you choose later.</p>
+                                    <div className="mt-5 grid gap-2 text-sm text-stone-700">
+                                        <p><strong>Project:</strong> {projectTitle || "Not added yet"}</p>
+                                        <p><strong>Type:</strong> {projectEventType ? getEventTypeLabel(projectEventType, projectCustomEventType) : "Not selected"}</p>
+                                        <p><strong>Crew:</strong> {crew.length ? crew.map((member) => `${member.count}x ${member.name}`).join(", ") : "Not specified"}</p>
+                                        <p><strong>Equipment:</strong> {formatRequirementLabels(projectEquipmentRequirements, "equipment").join(", ") || "Not specified"}</p>
+                                    </div>
+                                    <button disabled={isSubmitting} onClick={handleBuilderBooking} className="mt-6 w-full rounded-xl bg-rose-600 py-4 font-bold text-white transition-colors hover:bg-rose-700 disabled:opacity-50">
+                                        {isSubmitting ? "Submitting..." : "Submit Project Requirement"}
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* ====== LEGACY BUILDER MODE FLOW ====== */}
+                    {false && mode === "builder" && (
                         <motion.div
                             key="builder"
                             initial={{ opacity: 0, x: 20 }}
@@ -1419,8 +1713,150 @@ export default function BookingFlow() {
                     )}
 
 
-                    {/* ====== EQUIPMENT BOOKING FLOW ====== */}
+                    {/* ====== EQUIPMENT RENTAL REQUEST FLOW ====== */}
                     {mode === "equipment" && (
+                        <motion.div
+                            key="equipment-rental"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            className="w-full grid lg:grid-cols-3 gap-8"
+                        >
+                            <div className="lg:col-span-2 space-y-6">
+                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
+                                    <p className="mb-2 text-sm font-black uppercase tracking-wide text-violet-600">Equipment Rental Request</p>
+                                    <h2 className="text-3xl font-black text-stone-900 mb-2 font-display">Request equipment availability</h2>
+                                    <p className="text-stone-500 mb-8">Choose gear, dates, logistics, and operator support. Providers confirm availability and quote later.</p>
+
+                                    <div className="space-y-6">
+                                        <div>
+                                            <h3 className="font-black text-stone-900 mb-3">Rental packages</h3>
+                                            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                                                {EQUIPMENT_PACKAGES.map((kit) => (
+                                                    <button key={kit.id} type="button" onClick={() => selectEquipmentPackage(kit.id)} className="rounded-2xl border border-stone-200 bg-stone-50 p-4 text-left transition-all hover:border-violet-300 hover:bg-violet-50">
+                                                        <div className="font-black text-stone-900">{kit.name}</div>
+                                                        <p className="mt-1 text-xs font-medium text-stone-500">{kit.description}</p>
+                                                        <p className="mt-3 text-xs font-black uppercase tracking-wide text-violet-600">Use as rental kit</p>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid md:grid-cols-[1fr_auto] gap-3">
+                                            <div className="relative">
+                                                <Search className="w-5 h-5 text-stone-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                                                <input type="search" value={equipmentSearch} onChange={(event) => setEquipmentSearch(event.target.value)} placeholder="Search camera, lens, light, audio, drone..." className="w-full pl-12 pr-4 py-4 rounded-2xl border border-stone-200 bg-stone-50 text-stone-900 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                            </div>
+                                            <select value={activeEquipmentCategory} onChange={(event) => setActiveEquipmentCategory(event.target.value)} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm font-bold text-stone-700 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                                <option value="all">All categories</option>
+                                                {EQUIPMENT_CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {filteredEquipmentCategories.map((category) => {
+                                                const CategoryIcon = category.icon;
+                                                const isOpen = openEquipmentCategories[category.id] ?? true;
+                                                return (
+                                                    <section key={category.id} className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
+                                                        <button type="button" onClick={() => setOpenEquipmentCategories((current) => ({ ...current, [category.id]: !isOpen }))} className="flex w-full items-center justify-between gap-3 bg-stone-50 px-5 py-4 text-left">
+                                                            <span className="flex items-center gap-2 font-black text-stone-900"><CategoryIcon className="w-5 h-5 text-violet-600" />{category.name}</span>
+                                                            <span className="text-sm font-bold text-stone-500">{isOpen ? "Hide" : "Show"}</span>
+                                                        </button>
+                                                        {isOpen && (
+                                                            <div className="grid sm:grid-cols-2 gap-3 p-4">
+                                                                {category.items.map((item) => {
+                                                                    const selectedCount = equipment.find((entry) => entry.id === item.id)?.count || 0;
+                                                                    return (
+                                                                        <div key={item.id} className={`rounded-2xl border p-4 transition-all ${selectedCount ? "border-violet-500 bg-violet-50 shadow-lg shadow-violet-100" : "border-stone-200 bg-white hover:border-violet-200"}`}>
+                                                                            <div className="flex items-start justify-between gap-3">
+                                                                                <div>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <h4 className="font-black text-stone-900">{item.name}</h4>
+                                                                                        {selectedCount > 0 && <span className="rounded-full bg-violet-600 px-2 py-0.5 text-xs font-black text-white">{selectedCount}</span>}
+                                                                                    </div>
+                                                                                    <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-stone-400">{item.subcategory} · {item.availability}</p>
+                                                                                    <p className="mt-2 text-sm text-stone-600">{item.description}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="mt-4 flex items-center justify-between rounded-xl border border-stone-200 bg-stone-50 px-2 py-1">
+                                                                                <button aria-label={`Decrease ${item.name}`} title={`Decrease ${item.name}`} onClick={() => handleRemoveEquipment(item.id)} className="p-2 text-stone-500 hover:text-stone-900 disabled:opacity-40" disabled={!selectedCount}><Minus className="w-4 h-4" /></button>
+                                                                                <span className="text-lg font-black text-stone-900">{selectedCount}</span>
+                                                                                <button aria-label={`Increase ${item.name}`} title={`Increase ${item.name}`} onClick={() => handleAddEquipment({ id: item.id, name: item.name, rate: item.pricePerDay })} className="p-2 text-violet-600 hover:text-violet-700"><Plus className="w-4 h-4" /></button>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </section>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
+                                    <h3 className="text-xl font-bold text-stone-900 font-display mb-5">Rental dates</h3>
+                                    <div className="grid md:grid-cols-3 gap-4">
+                                        <input type="date" value={equipmentStartDate} onChange={(event) => setEquipmentStartDate(event.target.value)} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-violet-500" />
+                                        <input type="date" value={equipmentEndDate} onChange={(event) => setEquipmentEndDate(event.target.value)} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-violet-500" />
+                                        <input type="number" min={1} value={equipDays} onChange={(event) => setEquipDays(Math.max(1, Number(event.target.value || 1)))} placeholder="Rental days" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-violet-500" />
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
+                                    <h3 className="text-xl font-bold text-stone-900 font-display mb-5">Location & logistics</h3>
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <input value={equipmentLocation} onChange={(event) => setEquipmentLocation(event.target.value)} placeholder="Shoot / delivery location" className="md:col-span-2 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-violet-500" />
+                                        <label className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm font-bold text-stone-700"><input type="checkbox" checked={equipmentDeliveryNeeded} onChange={(event) => setEquipmentDeliveryNeeded(event.target.checked)} /> Delivery needed</label>
+                                        <label className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm font-bold text-stone-700"><input type="checkbox" checked={equipmentPickupNeeded} onChange={(event) => setEquipmentPickupNeeded(event.target.checked)} /> Pickup option</label>
+                                        <label className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm font-bold text-stone-700"><input type="checkbox" checked={equipmentOperatorNeeded} onChange={(event) => setEquipmentOperatorNeeded(event.target.checked)} /> Operator / technician required</label>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
+                                    <h3 className="text-xl font-bold text-stone-900 font-display mb-5">Notes & files</h3>
+                                    <textarea value={equipmentNotes} onChange={(event) => setEquipmentNotes(event.target.value)} rows={4} placeholder="Setup notes, special requirements, power/access details, operator needs..." className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-violet-500" />
+                                    <input value={equipmentReferenceLinks} onChange={(event) => setEquipmentReferenceLinks(event.target.value)} placeholder="Optional reference link" className="mt-4 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-violet-500" />
+                                </div>
+                            </div>
+
+                            <div className="lg:col-span-1">
+                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100 sticky top-24">
+                                    <h3 className="text-xl font-black text-stone-900 mb-6 font-display">Rental Request</h3>
+                                    {equipment.length === 0 ? (
+                                        <div className="text-center py-10 bg-stone-50 rounded-2xl border border-dashed border-stone-200">
+                                            <p className="text-stone-500 font-medium">No equipment selected.</p>
+                                            <p className="text-xs text-stone-400 mt-1">Choose gear or a package to request availability.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4 mb-8">
+                                            {equipment.map(item => (
+                                                <div key={item.id} className="flex items-center justify-between pb-4 border-b border-stone-100 last:border-0 last:pb-0">
+                                                    <div className="font-bold text-stone-900 text-sm">{item.name}</div>
+                                                    <div className="flex items-center gap-2 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200">
+                                                        <button aria-label={`Decrease ${item.name}`} onClick={() => handleRemoveEquipment(item.id)} className="text-stone-400 hover:text-stone-900 p-1"><Minus className="w-3 h-3" /></button>
+                                                        <span className="text-xs font-bold text-stone-900 w-3 text-center">{item.count}</span>
+                                                        <button aria-label={`Increase ${item.name}`} onClick={() => handleAddEquipment(item)} className="text-stone-400 hover:text-stone-900 p-1"><Plus className="w-3 h-3" /></button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div className="rounded-2xl bg-violet-50 p-5 text-sm text-violet-900 border border-violet-100">
+                                        Providers will confirm availability and quote. No fixed rental price is charged at this step.
+                                    </div>
+                                    <button disabled={equipment.length === 0 || isSubmitting} onClick={handleEquipmentBooking} className="mt-6 w-full py-4 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                        {isSubmitting ? "Submitting..." : "Submit Rental Request"}
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* ====== LEGACY EQUIPMENT BOOKING FLOW ====== */}
+                    {false && mode === "equipment" && (
                         <motion.div
                             key="equipment"
                             initial={{ opacity: 0, x: 20 }}
@@ -1762,18 +2198,30 @@ export default function BookingFlow() {
                                             <AnalysisList title="Art, Props & Locations" items={[...analysisResult.locations, ...analysisResult.props_art_direction]} tone="blue" />
                                             <AnalysisList title="Production Checklist" items={analysisResult.production_checklist} tone="emerald" />
                                         </div>
-                                        <div className="flex gap-3 pt-2">
+                                        <div className="grid md:grid-cols-2 gap-3 pt-2">
                                             <button
                                                 onClick={() => { setAnalysisResult(null); setScriptText(""); }}
-                                                className="flex-1 py-3 bg-stone-100 text-stone-700 font-bold rounded-xl hover:bg-stone-200 transition-colors text-sm"
+                                                className="py-3 bg-stone-100 text-stone-700 font-bold rounded-xl hover:bg-stone-200 transition-colors text-sm"
                                             >
                                                 Analyze Another
                                             </button>
                                             <button
-                                                onClick={applyScriptAnalysisToBooking}
-                                                className="flex-[2] py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors text-sm flex items-center justify-center gap-2"
+                                                onClick={() => applyScriptAnalysisToBooking("quick")}
+                                                className="py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors text-sm flex items-center justify-center gap-2"
                                             >
-                                                Use these recommendations <ArrowRight className="w-4 h-4" />
+                                                Use for Quick Booking <ArrowRight className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => applyScriptAnalysisToBooking("builder")}
+                                                className="py-3 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors text-sm flex items-center justify-center gap-2"
+                                            >
+                                                Use for Custom Project <ArrowRight className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => applyScriptAnalysisToBooking("equipment")}
+                                                className="py-3 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-700 transition-colors text-sm flex items-center justify-center gap-2"
+                                            >
+                                                Use for Equipment Request <ArrowRight className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
@@ -1828,6 +2276,51 @@ function AnalysisList({
             ) : (
                 <p className="text-sm opacity-75">No specific items detected.</p>
             )}
+        </div>
+    );
+}
+
+function RequirementChipGroups({
+    title,
+    categories,
+    selected,
+    onToggle,
+}: {
+    title: string;
+    categories: typeof EQUIPMENT_REQUIREMENT_CATEGORIES;
+    selected: Record<string, boolean>;
+    onToggle: (id: string) => void;
+}) {
+    return (
+        <div className="rounded-2xl border border-stone-200 bg-white p-5">
+            <h4 className="mb-4 font-black text-stone-900">{title}</h4>
+            <div className="space-y-4">
+                {categories.map((category) => {
+                    const selectedCount = getSelectedCount(category, selected);
+                    return (
+                        <div key={category.id}>
+                            <div className="mb-2 text-sm font-black text-stone-700">
+                                {category.label}{selectedCount ? ` · ${selectedCount} selected` : ""}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {category.options.map((option) => {
+                                    const isSelected = Boolean(selected[option.id]);
+                                    return (
+                                        <button
+                                            key={option.id}
+                                            type="button"
+                                            onClick={() => onToggle(option.id)}
+                                            className={`rounded-full border px-4 py-2 text-sm font-bold transition-all ${isSelected ? "border-rose-500 bg-rose-50 text-rose-700" : "border-stone-200 bg-stone-50 text-stone-600 hover:border-rose-200"}`}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }
