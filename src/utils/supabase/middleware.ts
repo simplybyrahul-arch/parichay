@@ -66,10 +66,11 @@ export async function updateSession(request: NextRequest) {
     // Redirect to login if a user tries to access restricted areas without being logged in
     const isDashboardPath = request.nextUrl.pathname.startsWith('/dashboard')
     const isCreatorDashboardPath = request.nextUrl.pathname.startsWith('/creator-dashboard')
+    const isVendorDashboardPath = request.nextUrl.pathname.startsWith('/vendor-dashboard')
     const isAdminPath = request.nextUrl.pathname.startsWith('/admin')
     const isBookPath = request.nextUrl.pathname.startsWith('/book')
     const isOpportunityPath = request.nextUrl.pathname.startsWith('/opportunities')
-    const isProtectedPath = isDashboardPath || isCreatorDashboardPath || isAdminPath || isBookPath || isOpportunityPath
+    const isProtectedPath = isDashboardPath || isCreatorDashboardPath || isVendorDashboardPath || isAdminPath || isBookPath || isOpportunityPath
 
     if (!user && isProtectedPath) {
         const url = request.nextUrl.clone()
@@ -93,7 +94,7 @@ export async function updateSession(request: NextRequest) {
         return supabaseResponse
     }
 
-    if (user && (isAuthPath || isDashboardPath || isCreatorDashboardPath || isAdminPath)) {
+    if (user && (isAuthPath || isDashboardPath || isCreatorDashboardPath || isVendorDashboardPath || isAdminPath)) {
         // Fetch real-time account_type directly from the database to bypass stale JWT metadata issues
         const { data: profile } = await supabase.from('users').select('account_type').eq('id', user.id).single()
         const accountType = profile?.account_type || user.user_metadata?.account_type
@@ -101,28 +102,33 @@ export async function updateSession(request: NextRequest) {
         // If they are on the login/signup page and already logged in, redirect them
         if (isAuthPath) {
             const url = request.nextUrl.clone()
-            url.pathname = accountType === 'admin' ? '/admin' : accountType === 'creator' ? '/creator-dashboard' : '/dashboard'
+            url.pathname = accountType === 'admin' ? '/admin' : accountType === 'creator' ? '/creator-dashboard' : accountType === 'equipment_vendor' ? '/vendor-dashboard' : '/dashboard'
             return NextResponse.redirect(url)
         }
 
         // Secure Admin routes
         if (isAdminPath && accountType !== 'admin') {
             const url = request.nextUrl.clone()
+            url.pathname = accountType === 'creator' ? '/creator-dashboard' : accountType === 'equipment_vendor' ? '/vendor-dashboard' : '/dashboard'
+            return NextResponse.redirect(url)
+        }
+
+        // Keep dashboards scoped to their own account type.
+        if (isCreatorDashboardPath && accountType !== 'creator') {
+            const url = request.nextUrl.clone()
+            url.pathname = accountType === 'equipment_vendor' ? '/vendor-dashboard' : '/dashboard'
+            return NextResponse.redirect(url)
+        }
+
+        if (isVendorDashboardPath && accountType !== 'equipment_vendor') {
+            const url = request.nextUrl.clone()
             url.pathname = accountType === 'creator' ? '/creator-dashboard' : '/dashboard'
             return NextResponse.redirect(url)
         }
 
-        // If a client tries to access creator dashboard, bounce them
-        if (isCreatorDashboardPath && accountType === 'client') {
+        if (isDashboardPath && accountType !== 'client') {
             const url = request.nextUrl.clone()
-            url.pathname = '/dashboard'
-            return NextResponse.redirect(url)
-        }
-
-        // If a creator tries to access client dashboard, bounce them
-        if (isDashboardPath && accountType === 'creator') {
-            const url = request.nextUrl.clone()
-            url.pathname = '/creator-dashboard'
+            url.pathname = accountType === 'creator' ? '/creator-dashboard' : accountType === 'equipment_vendor' ? '/vendor-dashboard' : '/admin'
             return NextResponse.redirect(url)
         }
     }

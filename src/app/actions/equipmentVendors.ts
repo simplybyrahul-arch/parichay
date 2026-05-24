@@ -1,0 +1,379 @@
+"use server";
+
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/utils/supabase/server";
+import { calculateProfileCompletion } from "@/lib/equipment/vendors";
+
+type ActionResult = {
+    success: boolean;
+    message: string;
+};
+
+export type VendorInventoryItem = {
+    id: string;
+    provider_id: string;
+    category: string;
+    equipment_name: string;
+    brand: string | null;
+    model: string | null;
+    quantity: number;
+    condition: string;
+    operator_required: boolean;
+    delivery_available: boolean;
+    security_deposit: number | null;
+    images: string[];
+    availability_status: string;
+    is_active: boolean;
+    created_at: string;
+};
+
+export type VendorRentalRequest = {
+    id: string;
+    project_id: string;
+    status: string;
+    match_reason: string | null;
+    match_score: number | null;
+    quote_amount: number | null;
+    notes: string | null;
+    created_at: string;
+    project_title: string;
+    project_description: string;
+    project_status: string;
+    booking_location: string | null;
+    event_date: string | null;
+    estimated_days: number | null;
+    requirement_summary: string | null;
+    client_name: string | null;
+};
+
+export type VendorDashboardData = {
+    user: {
+        id: string;
+        email: string | null;
+        full_name: string | null;
+    };
+    provider: {
+        id: string;
+        business_name: string | null;
+        contact_name: string | null;
+        city: string | null;
+        state: string | null;
+        verified: boolean;
+        profile_completion: number;
+    };
+    vendor: {
+        phone: string | null;
+        whatsapp_phone: string | null;
+        warehouse_address: string | null;
+        gst_number: string | null;
+        years_in_business: number | null;
+        delivery_available: boolean;
+        delivery_radius_km: number;
+        operator_support_available: boolean;
+        equipment_categories: string[];
+        response_time: string | null;
+        business_logo_url: string | null;
+    } | null;
+    inventory: VendorInventoryItem[];
+    requests: VendorRentalRequest[];
+};
+
+function getRequiredEnv(name: string) {
+    const value = process.env[name];
+    if (!value) throw new Error(`${name} is not configured`);
+    return value;
+}
+
+function createAdminClient() {
+    return createSupabaseAdminClient(
+        getRequiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
+        getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+        { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+}
+
+function toArray(value: unknown): string[] {
+    if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean);
+    if (typeof value === "string" && value.trim()) return [value.trim()];
+    return [];
+}
+
+function cleanText(value: FormDataEntryValue | null) {
+    return String(value || "").trim();
+}
+
+function cleanNumber(value: FormDataEntryValue | null, fallback: number | null = null) {
+    const numberValue = Number(value || 0);
+    return Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : fallback;
+}
+
+async function requireVendor() {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Login required.");
+
+    const admin = createAdminClient();
+    const { data: profile, error } = await admin
+        .from("users")
+        .select("id, full_name, account_type")
+        .eq("id", user.id)
+        .single();
+
+    if (error || profile?.account_type !== "equipment_vendor") {
+        throw new Error("Equipment vendor account required.");
+    }
+
+    const { data: provider, error: providerError } = await admin
+        .from("provider_profiles")
+        .select("id, user_id, business_name, contact_name, city, state, verified, profile_completion")
+        .eq("user_id", user.id)
+        .eq("provider_type", "equipment_vendor")
+        .maybeSingle();
+
+    if (providerError || !provider) {
+        throw new Error("Equipment vendor profile was not found.");
+    }
+
+    return { admin, user, userProfile: profile, provider };
+}
+
+export async function getVendorDashboardData(): Promise<VendorDashboardData> {
+    const { admin, user, userProfile, provider } = await requireVendor();
+
+    const [{ data: vendor }, { data: inventory }, { data: responses }] = await Promise.all([
+        admin
+            .from("equipment_vendor_profiles")
+            .select("*")
+            .eq("provider_id", provider.id)
+            .maybeSingle(),
+        admin
+            .from("equipment_inventory")
+            .select("*")
+            .eq("provider_id", provider.id)
+            .order("created_at", { ascending: false }),
+        admin
+            .from("equipment_rental_responses")
+            .select("*, projects!equipment_rental_responses_project_id_fkey(id, title, description, status, booking_location, event_date, estimated_days, requirement_summary, users!client_id(full_name))")
+            .eq("provider_id", provider.id)
+            .order("created_at", { ascending: false }),
+    ]);
+
+    const requests = ((responses || []) as Array<Record<string, unknown>>).map((response) => {
+        const project = response.projects as Record<string, unknown> | null;
+        const client = project?.users as { full_name?: string | null } | { full_name?: string | null }[] | null | undefined;
+        const clientName = Array.isArray(client) ? client[0]?.full_name : client?.full_name;
+        return {
+            id: String(response.id),
+            project_id: String(response.project_id),
+            status: String(response.status),
+            match_reason: response.match_reason ? String(response.match_reason) : null,
+            match_score: response.match_score === null ? null : Number(response.match_score || 0),
+            quote_amount: response.quote_amount === null ? null : Number(response.quote_amount || 0),
+            notes: response.notes ? String(response.notes) : null,
+            created_at: String(response.created_at),
+            project_title: String(project?.title || "Equipment Rental Request"),
+            project_description: String(project?.description || ""),
+            project_status: String(project?.status || ""),
+            booking_location: project?.booking_location ? String(project.booking_location) : null,
+            event_date: project?.event_date ? String(project.event_date) : null,
+            estimated_days: project?.estimated_days === null ? null : Number(project?.estimated_days || 0),
+            requirement_summary: project?.requirement_summary ? String(project.requirement_summary) : null,
+            client_name: clientName || null,
+        };
+    });
+
+    return {
+        user: {
+            id: user.id,
+            email: user.email || null,
+            full_name: userProfile.full_name || null,
+        },
+        provider: {
+            id: provider.id,
+            business_name: provider.business_name,
+            contact_name: provider.contact_name,
+            city: provider.city,
+            state: provider.state,
+            verified: Boolean(provider.verified),
+            profile_completion: Number(provider.profile_completion || 0),
+        },
+        vendor: vendor ? {
+            phone: vendor.phone,
+            whatsapp_phone: vendor.whatsapp_phone,
+            warehouse_address: vendor.warehouse_address,
+            gst_number: vendor.gst_number,
+            years_in_business: vendor.years_in_business,
+            delivery_available: Boolean(vendor.delivery_available),
+            delivery_radius_km: Number(vendor.delivery_radius_km || 0),
+            operator_support_available: Boolean(vendor.operator_support_available),
+            equipment_categories: toArray(vendor.equipment_categories),
+            response_time: vendor.response_time,
+            business_logo_url: vendor.business_logo_url,
+        } : null,
+        inventory: ((inventory || []) as VendorInventoryItem[]).map((item) => ({
+            ...item,
+            images: toArray(item.images),
+        })),
+        requests,
+    };
+}
+
+export async function updateVendorProfile(formData: FormData): Promise<ActionResult> {
+    try {
+        const { admin, provider } = await requireVendor();
+        const businessName = cleanText(formData.get("business_name"));
+        const contactName = cleanText(formData.get("contact_name"));
+        const phone = cleanText(formData.get("phone"));
+        const city = cleanText(formData.get("city"));
+        const warehouseAddress = cleanText(formData.get("warehouse_address"));
+        const equipmentCategories = cleanText(formData.get("equipment_categories")).split(",").map((item) => item.trim()).filter(Boolean);
+
+        if (!businessName || !contactName || !phone || !city || !warehouseAddress || equipmentCategories.length === 0) {
+            return { success: false, message: "Business name, contact, phone, city, warehouse address, and categories are required." };
+        }
+
+        const profileCompletion = calculateProfileCompletion({
+            businessName,
+            contactName,
+            city,
+            phone,
+            warehouseAddress,
+            equipmentCategories,
+            deliveryAvailable: String(formData.get("delivery_available")) === "true",
+        });
+
+        const { error: providerError } = await admin
+            .from("provider_profiles")
+            .update({
+                business_name: businessName,
+                contact_name: contactName,
+                city,
+                state: cleanText(formData.get("state")) || null,
+                profile_completion: profileCompletion,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", provider.id);
+
+        if (providerError) throw providerError;
+
+        const { error: vendorError } = await admin
+            .from("equipment_vendor_profiles")
+            .upsert({
+                provider_id: provider.id,
+                phone,
+                whatsapp_phone: cleanText(formData.get("whatsapp_phone")) || phone,
+                warehouse_address: warehouseAddress,
+                gst_number: cleanText(formData.get("gst_number")) || null,
+                years_in_business: cleanNumber(formData.get("years_in_business")),
+                delivery_available: String(formData.get("delivery_available")) === "true",
+                delivery_radius_km: cleanNumber(formData.get("delivery_radius_km"), 0),
+                operator_support_available: String(formData.get("operator_support_available")) === "true",
+                equipment_categories: equipmentCategories,
+                response_time: cleanText(formData.get("response_time")) || null,
+                business_logo_url: cleanText(formData.get("business_logo_url")) || null,
+                updated_at: new Date().toISOString(),
+            }, { onConflict: "provider_id" });
+
+        if (vendorError) throw vendorError;
+
+        revalidatePath("/vendor-dashboard");
+        return { success: true, message: "Vendor profile saved." };
+    } catch (error) {
+        console.error("Vendor profile save error:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Could not save vendor profile." };
+    }
+}
+
+export async function saveInventoryItem(formData: FormData): Promise<ActionResult> {
+    try {
+        const { admin, provider } = await requireVendor();
+        const id = cleanText(formData.get("id"));
+        const equipmentName = cleanText(formData.get("equipment_name"));
+        const category = cleanText(formData.get("category"));
+        const quantity = cleanNumber(formData.get("quantity"), 1);
+
+        if (!equipmentName || !category) {
+            return { success: false, message: "Equipment name and category are required." };
+        }
+
+        const payload = {
+            provider_id: provider.id,
+            category,
+            equipment_name: equipmentName,
+            brand: cleanText(formData.get("brand")) || null,
+            model: cleanText(formData.get("model")) || null,
+            quantity: Math.max(0, Number(quantity || 0)),
+            condition: cleanText(formData.get("condition")) || "good",
+            operator_required: String(formData.get("operator_required")) === "true",
+            delivery_available: String(formData.get("delivery_available")) === "true",
+            security_deposit: cleanNumber(formData.get("security_deposit")),
+            images: cleanText(formData.get("images")).split(",").map((item) => item.trim()).filter(Boolean),
+            availability_status: cleanText(formData.get("availability_status")) || "available",
+            is_active: String(formData.get("is_active")) !== "false",
+            updated_at: new Date().toISOString(),
+        };
+
+        const query = id
+            ? admin.from("equipment_inventory").update(payload).eq("id", id).eq("provider_id", provider.id)
+            : admin.from("equipment_inventory").insert(payload);
+
+        const { error } = await query;
+        if (error) throw error;
+
+        revalidatePath("/vendor-dashboard");
+        return { success: true, message: "Inventory saved." };
+    } catch (error) {
+        console.error("Inventory save error:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Could not save inventory." };
+    }
+}
+
+export async function deleteInventoryItem(itemId: string): Promise<ActionResult> {
+    try {
+        const { admin, provider } = await requireVendor();
+        const { error } = await admin
+            .from("equipment_inventory")
+            .delete()
+            .eq("id", itemId)
+            .eq("provider_id", provider.id);
+
+        if (error) throw error;
+
+        revalidatePath("/vendor-dashboard");
+        return { success: true, message: "Inventory item deleted." };
+    } catch (error) {
+        console.error("Inventory delete error:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Could not delete inventory item." };
+    }
+}
+
+export async function respondToRentalRequest(responseId: string, status: "available" | "quoted" | "declined" | "unavailable", quoteAmount?: number, notes?: string): Promise<ActionResult> {
+    try {
+        const { admin, provider } = await requireVendor();
+        const allowed = new Set(["available", "quoted", "declined", "unavailable"]);
+        if (!allowed.has(status)) {
+            return { success: false, message: "Invalid rental response status." };
+        }
+
+        const { error } = await admin
+            .from("equipment_rental_responses")
+            .update({
+                status,
+                quote_amount: status === "quoted" ? Number(quoteAmount || 0) : null,
+                notes: notes?.trim() || null,
+                responded_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", responseId)
+            .eq("provider_id", provider.id);
+
+        if (error) throw error;
+
+        revalidatePath("/vendor-dashboard");
+        return { success: true, message: "Rental request response saved." };
+    } catch (error) {
+        console.error("Rental response update error:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Could not update rental request." };
+    }
+}

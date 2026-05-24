@@ -3,6 +3,7 @@
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/server";
 import { matchCreators, type BookingType } from "@/lib/matching/matchCreators";
+import { matchEquipmentVendors } from "@/lib/matching/matchEquipmentVendors";
 import { revalidatePath } from "next/cache";
 
 export type CreateBookingInput = {
@@ -14,6 +15,7 @@ export type CreateBookingInput = {
     crewRequirements?: Record<string, number> | null;
     equipmentRequirements?: Record<string, number | boolean> | null;
     postProductionRequirements?: Record<string, number | boolean> | null;
+    equipmentOperatorRequired?: boolean;
     estimatedDays?: number | null;
     requirementSummary?: string | null;
     budget: number;
@@ -104,6 +106,7 @@ function validateBookingInput(input: CreateBookingInput) {
         crewRequirements: cleanCrewRequirements,
         equipmentRequirements: cleanRequirementMap(input.equipmentRequirements),
         postProductionRequirements: cleanRequirementMap(input.postProductionRequirements),
+        equipmentOperatorRequired: input.equipmentOperatorRequired === true,
         estimatedDays,
         requirementSummary: input.requirementSummary?.trim() || description,
         budget,
@@ -114,6 +117,64 @@ function validateBookingInput(input: CreateBookingInput) {
         notificationTitle: input.notificationTitle || "New booking opportunity",
         notificationMessage: input.notificationMessage?.trim() || null,
     };
+}
+
+async function notifyEquipmentVendors(
+    admin: ReturnType<typeof createAdminClient>,
+    projectId: string,
+    booking: ReturnType<typeof validateBookingInput>
+) {
+    const matches = await matchEquipmentVendors(admin, {
+        projectId,
+        bookingLocation: booking.bookingLocation,
+        equipmentRequirements: booking.equipmentRequirements,
+        operatorRequired: booking.equipmentOperatorRequired,
+    });
+
+    let responseCount = 0;
+    for (const match of matches) {
+        const { data: response, error: responseError } = await admin
+            .from("equipment_rental_responses")
+            .insert({
+                project_id: projectId,
+                provider_id: match.providerId,
+                status: "sent",
+                match_reason: match.matchReason,
+                match_score: match.matchScore,
+            })
+            .select("id")
+            .single();
+
+        if (responseError || !response) {
+            console.error("Equipment rental response creation error:", responseError);
+            continue;
+        }
+
+        const { error: notificationError } = await admin
+            .from("notifications")
+            .insert({
+                user_id: match.userId,
+                project_id: projectId,
+                type: "equipment_rental_request",
+                title: "New equipment rental request",
+                message: "New equipment rental request. Confirm availability and quote.",
+                data: {
+                    project_id: projectId,
+                    response_id: response.id,
+                    cta_url: "/vendor-dashboard",
+                    booking_location: booking.bookingLocation,
+                    event_date: booking.eventDate,
+                },
+            });
+
+        if (notificationError) {
+            console.error("Equipment vendor notification creation error:", notificationError);
+        }
+
+        responseCount += 1;
+    }
+
+    return responseCount;
 }
 
 function formatNotificationMessage(input: ReturnType<typeof validateBookingInput>) {
@@ -180,6 +241,18 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
         if (projectError || !project) {
             console.error("Booking project creation error:", projectError);
             return { success: false, message: "Could not create booking. Please try again." };
+        }
+
+        if (booking.bookingType === "equipment") {
+            const responseCount = await notifyEquipmentVendors(admin, project.id, booking);
+            revalidatePath("/dashboard");
+
+            return {
+                success: true,
+                project_id: project.id,
+                match_count: responseCount,
+                message: "Rental request submitted. Verified equipment vendors are being notified.",
+            };
         }
 
         let matches;

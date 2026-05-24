@@ -49,6 +49,31 @@ type CreatorData = {
     users: RelatedUser;
 };
 
+type RentalResponseData = {
+    id: string;
+    status: string;
+    match_reason: string | null;
+    match_score: number | null;
+    quote_amount: number | null;
+    notes: string | null;
+    created_at: string;
+    provider_profiles: {
+        business_name: string | null;
+        city: string | null;
+        state: string | null;
+        verified: boolean | null;
+        equipment_vendor_profiles?: {
+            delivery_available?: boolean | null;
+            operator_support_available?: boolean | null;
+            equipment_categories?: string[] | null;
+        } | {
+            delivery_available?: boolean | null;
+            operator_support_available?: boolean | null;
+            equipment_categories?: string[] | null;
+        }[] | null;
+    } | null;
+};
+
 function first<T>(value: T | T[] | null | undefined) {
     return Array.isArray(value) ? value[0] : value;
 }
@@ -88,7 +113,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
     if (!projectData) notFound();
     const project = projectData as unknown as ProjectRow;
 
-    const [{ data: invitesData }, { data: creatorsData }] = await Promise.all([
+    const [{ data: invitesData }, { data: creatorsData }, { data: rentalResponsesData }] = await Promise.all([
         supabase
             .from("project_invites")
             .select(`
@@ -112,6 +137,11 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
             .select("id, role, city, location, creator_type, day_rate, verified, available_for_booking, users(full_name)")
             .eq("verified", true)
             .order("role", { ascending: true }),
+        supabase
+            .from("equipment_rental_responses")
+            .select("id, status, match_reason, match_score, quote_amount, notes, created_at, provider_profiles(business_name, city, state, verified, equipment_vendor_profiles(delivery_available, operator_support_available, equipment_categories))")
+            .eq("project_id", id)
+            .order("created_at", { ascending: false }),
     ]);
 
     const invitedIds = new Set((invitesData || []).map((invite) => invite.creator_id));
@@ -153,6 +183,7 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
         }));
 
     const selectedCreator = first(project.selected_creator);
+    const rentalResponses = (rentalResponsesData || []) as unknown as RentalResponseData[];
 
     return (
         <div className="space-y-8">
@@ -196,7 +227,53 @@ export default async function AdminProjectDetailPage({ params }: { params: Promi
                 )}
             </section>
 
-            <AdminProjectControls projectId={project.id} invites={invites} candidates={candidates} />
+            {project.booking_type === "equipment" && (
+                <section className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5">
+                    <div className="mb-4">
+                        <h3 className="text-lg font-black text-stone-900">Equipment Vendor Responses</h3>
+                        <p className="text-sm text-stone-500">Rental providers matched to this equipment request. These are separate from creator invites.</p>
+                    </div>
+                    <div className="space-y-3">
+                        {rentalResponses.map((response) => {
+                            const provider = response.provider_profiles;
+                            const vendorProfile = first(provider?.equipment_vendor_profiles);
+                            return (
+                                <div key={response.id} className="rounded-xl border border-stone-100 bg-stone-50 p-4">
+                                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                        <div>
+                                            <div className="font-black text-stone-900">{provider?.business_name || "Equipment vendor"}</div>
+                                            <div className="text-xs text-stone-500">
+                                                {[provider?.city, provider?.state].filter(Boolean).join(", ") || "City not set"} · {provider?.verified ? "Verified" : "Unverified"}
+                                            </div>
+                                            <div className="mt-2 text-xs text-stone-500">
+                                                {vendorProfile?.delivery_available ? "Delivery available" : "Pickup/local only"} · {vendorProfile?.operator_support_available ? "Operator support" : "No operator support"}
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <Badge>{response.status}</Badge>
+                                            {response.quote_amount ? <div className="mt-2 text-xs font-bold text-stone-700">Quote: Rs {Number(response.quote_amount).toLocaleString("en-IN")}</div> : null}
+                                        </div>
+                                    </div>
+                                    {response.match_reason ? <p className="mt-3 text-xs font-semibold text-violet-700">{response.match_reason}</p> : null}
+                                    {response.notes ? <p className="mt-2 text-sm text-stone-600">{response.notes}</p> : null}
+                                    {vendorProfile?.equipment_categories?.length ? (
+                                        <p className="mt-2 text-xs text-stone-500">Categories: {vendorProfile.equipment_categories.join(", ")}</p>
+                                    ) : null}
+                                </div>
+                            );
+                        })}
+                        {rentalResponses.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 p-6 text-center text-sm text-stone-500">
+                                No equipment vendors matched yet.
+                            </div>
+                        ) : null}
+                    </div>
+                </section>
+            )}
+
+            {project.booking_type !== "equipment" && (
+                <AdminProjectControls projectId={project.id} invites={invites} candidates={candidates} />
+            )}
         </div>
     );
 }
