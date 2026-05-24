@@ -30,8 +30,8 @@ import {
     EQUIPMENT_CATEGORIES,
     EQUIPMENT_PACKAGES,
     getEquipmentItemById,
-    getRecommendedEquipment,
 } from "@/lib/bookings/equipmentCatalog";
+import { getSuggestedProductionSetup, type SetupPresetId } from "@/lib/bookings/suggestedSetup";
 import {
     buildProjectRequirementSummary,
     findEventTypeFromText,
@@ -39,7 +39,7 @@ import {
     mapBudgetTierToPlanningBudget,
 } from "@/lib/bookings/bookingPayload";
 import type { ScriptAnalysisResult } from "@/lib/ai/scriptAnalysis";
-import type { BudgetTier } from "@/config/bookingOptions";
+import type { BookingCategory, BudgetTier } from "@/config/bookingOptions";
 
 export default function BookingFlow() {
     const [mode, setMode] = useState<"selection" | "quick" | "builder" | "equipment" | "script">("selection");
@@ -65,6 +65,7 @@ export default function BookingFlow() {
     const [crew, setCrew] = useState<Array<{ id: string, name: string, rate: number, count: number }>>([]);
     const [days, setDays] = useState(1);
     const [projectTitle, setProjectTitle] = useState("");
+    const [projectEventCategoryId, setProjectEventCategoryId] = useState("");
     const [projectEventType, setProjectEventType] = useState("");
     const [projectCustomEventType, setProjectCustomEventType] = useState("");
     const [projectDescription, setProjectDescription] = useState("");
@@ -205,7 +206,7 @@ export default function BookingFlow() {
     const [matchSort, setMatchSort] = useState("recommended");
     const [isFindingMatches, setIsFindingMatches] = useState(false);
     const [selectedEventCategoryId, setSelectedEventCategoryId] = useState("");
-    const [setupPreset, setSetupPreset] = useState<"simple" | "standard" | "full" | "custom">("standard");
+    const [setupPreset, setSetupPreset] = useState<SetupPresetId>("standard");
     const [needsEquipment, setNeedsEquipment] = useState(false);
     const [openCrewCategories, setOpenCrewCategories] = useState<Record<string, boolean>>({
         photography: true,
@@ -217,7 +218,6 @@ export default function BookingFlow() {
     });
     const selectedEventLabel = getEventTypeLabel(selectedEventType, customEventType);
     const crewSummary = getCrewRequirementSummary(crewRequirements);
-    const recommendedEquipment = getRecommendedEquipment(selectedEventType);
     const sortedQuickMatches = useMemo(() => {
         return [...quickMatches].sort((a, b) => {
             if (matchSort === "rating") return b.rating - a.rating;
@@ -240,6 +240,7 @@ export default function BookingFlow() {
             .filter((category) => category.options.length > 0);
     }, [eventTypeSearch]);
     const selectedEventCategory = BOOKING_EVENT_CATEGORIES.find((category) => category.id === selectedEventCategoryId);
+    const selectedProjectEventCategory = BOOKING_EVENT_CATEGORIES.find((category) => category.id === projectEventCategoryId);
     const selectedEquipmentNames = EQUIPMENT_REQUIREMENT_OPTIONS
         .filter((item) => equipmentRequirements[item.id])
         .map((item) => item.label);
@@ -253,28 +254,35 @@ export default function BookingFlow() {
         { id: "full", label: "Full Production Crew", description: "Larger setup with direction, video, drone, and sound.", crew: { photographer: 1, videographer: 1, drone_operator: 1, sound_engineer: 1, production_manager: 1 } },
         { id: "custom", label: "Custom Setup", description: "Pick every crew role, equipment item, and post service yourself.", crew: {} },
     ] as const;
-    const suggestedCrew: Record<string, number> = selectedEventType.includes("wedding")
-        ? { photographer: 1, videographer: 1, drone_operator: 1 }
-        : selectedEventType.includes("podcast") || selectedEventType.includes("interview")
-            ? { videographer: 1, camera_operator: 1, sound_engineer: 1 }
-            : selectedEventType.includes("product") || selectedEventType.includes("commercial")
-                ? { photographer: 1, lighting_technician: 1, photo_editor: 1 }
-                : { photographer: 1, videographer: 1 };
+    const suggestedSetup = selectedEventType
+        ? getSuggestedProductionSetup(selectedEventType, setupPreset)
+        : null;
+    const suggestedPreviewItems = [
+        ...(suggestedSetup?.crewLabels || []).slice(0, 4),
+        ...(suggestedSetup?.equipmentLabels || []).slice(0, 4),
+        ...(suggestedSetup?.postProductionLabels || []).slice(0, 3),
+    ];
     const applySetupPreset = (preset: typeof setupPresets[number]) => {
         setSetupPreset(preset.id);
         if (preset.id !== "custom") setCrewRequirements(preset.crew);
     };
     const addSuggestedSetup = () => {
-        setCrewRequirements((current) => ({ ...suggestedCrew, ...current }));
-        const nextEquipment = recommendedEquipment.slice(0, 4).reduce<Record<string, boolean>>((items, item) => {
-            items[item.id] = true;
-            return items;
-        }, {});
-        if (Object.keys(nextEquipment).length > 0) {
+        if (!suggestedSetup) return;
+
+        setCrewRequirements((current) => {
+            const next = { ...current };
+            Object.entries(suggestedSetup.crewRequirements).forEach(([roleId, quantity]) => {
+                next[roleId] = Math.max(Number(next[roleId] || 0), quantity);
+            });
+            return next;
+        });
+
+        if (Object.keys(suggestedSetup.equipmentRequirements).length || Object.keys(suggestedSetup.postProductionRequirements).length) {
             setNeedsEquipment(true);
-            setEquipmentRequirements((current) => ({ ...current, ...nextEquipment }));
+            setEquipmentRequirements((current) => ({ ...current, ...suggestedSetup.equipmentRequirements }));
+            setPostProductionRequirements((current) => ({ ...current, ...suggestedSetup.postProductionRequirements }));
         }
-        toast.success("Suggested setup added.");
+        toast.success("Suggested setup added. You can remove or adjust anything below.");
     };
     const durationPresetValue = [2, 4, 8].includes(durationHours) ? String(durationHours) : "other";
     const handleDurationPresetChange = (value: string) => {
@@ -300,6 +308,29 @@ export default function BookingFlow() {
         entertainment_media: "Music videos, films, documentaries",
         social_creator: "Reels, YouTube, creator content",
         custom: "Describe your exact requirement",
+    };
+    const findEventCategoryId = (eventType: string) => {
+        return BOOKING_EVENT_CATEGORIES.find((category) => category.options.some((option) => option.id === eventType))?.id || "";
+    };
+    const handleQuickCategorySelect = (categoryId: string) => {
+        setSelectedEventCategoryId(categoryId);
+        setSelectedEventType("");
+        setCustomEventType("");
+    };
+    const handleQuickCategoryChange = () => {
+        setSelectedEventCategoryId("");
+        setSelectedEventType("");
+        setCustomEventType("");
+    };
+    const handleProjectCategorySelect = (categoryId: string) => {
+        setProjectEventCategoryId(categoryId);
+        setProjectEventType("");
+        setProjectCustomEventType("");
+    };
+    const handleProjectCategoryChange = () => {
+        setProjectEventCategoryId("");
+        setProjectEventType("");
+        setProjectCustomEventType("");
     };
 
     const updateCrewRequirement = (roleId: string, delta: number) => {
@@ -355,7 +386,7 @@ export default function BookingFlow() {
                 budgetTier?: BudgetTier;
                 customBudgetAmount?: string;
                 selectedEventCategoryId?: string;
-                setupPreset?: "simple" | "standard" | "full" | "custom";
+                setupPreset?: SetupPresetId;
                 needsEquipment?: boolean;
             };
 
@@ -525,10 +556,13 @@ export default function BookingFlow() {
         const maps = getAnalysisRequirementMaps();
         if (!maps) return;
         const eventTypeFromAnalysis = findEventTypeFromText(analysisResult.detected_project_type);
+        const eventCategoryFromAnalysis = findEventCategoryId(eventTypeFromAnalysis);
 
         setSelectedEventType(eventTypeFromAnalysis);
+        setSelectedEventCategoryId(eventCategoryFromAnalysis);
         setCustomEventType(eventTypeFromAnalysis === CUSTOM_EVENT_TYPE_ID ? analysisResult.detected_project_type || "Custom Requirement" : "");
         setProjectEventType(eventTypeFromAnalysis);
+        setProjectEventCategoryId(eventCategoryFromAnalysis);
         setProjectCustomEventType(eventTypeFromAnalysis === CUSTOM_EVENT_TYPE_ID ? analysisResult.detected_project_type || "Custom Requirement" : "");
         if (Object.keys(maps.crewFromAnalysis).length > 0) {
             setCrewRequirements(maps.crewFromAnalysis);
@@ -583,6 +617,10 @@ export default function BookingFlow() {
         }
         if (!projectEventType) {
             toast.error("Please choose a project type.");
+            return;
+        }
+        if (projectEventType === CUSTOM_EVENT_TYPE_ID && !projectCustomEventType.trim()) {
+            toast.error("Describe your custom project type.");
             return;
         }
         setIsSubmitting(true);
@@ -895,92 +933,58 @@ export default function BookingFlow() {
                                 <div className="space-y-8">
                                     <div>
                                         <p className="mb-2 text-sm font-black uppercase tracking-wide text-orange-600">Quick Booking</p>
-                                        <h2 className="text-3xl md:text-4xl font-black text-stone-900 mb-2 font-display">What are you shooting?</h2>
-                                        <p className="text-stone-500">Choose a category first. We&apos;ll ask for the exact shoot type next.</p>
+                                        <h2 className="text-3xl md:text-4xl font-black text-stone-900 mb-2 font-display">
+                                            {selectedEventCategory ? "Choose specific shoot type" : "What are you shooting?"}
+                                        </h2>
+                                        <p className="text-stone-500">
+                                            {selectedEventCategory ? "Pick the exact type so we can match the right creators." : "Choose a category first. We&apos;ll ask for the exact shoot type next."}
+                                        </p>
                                     </div>
-                                    <div className="relative">
-                                        <Search className="w-5 h-5 text-stone-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                                        <input
-                                            type="search"
-                                            value={eventTypeSearch}
-                                            onChange={(event) => setEventTypeSearch(event.target.value)}
-                                            placeholder="Search event or project type"
-                                            className="w-full pl-12 pr-4 py-4 rounded-2xl border border-stone-200 bg-stone-50 text-stone-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                                        />
-                                    </div>
-                                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {filteredEventCategories.map((category) => {
-                                            const CategoryIcon = category.icon;
-                                            const isSelected = selectedEventCategoryId === category.id;
-                                            return (
-                                                <button
-                                                    key={category.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setSelectedEventCategoryId(category.id);
-                                                        if (category.options.length === 1) setSelectedEventType(category.options[0].id);
-                                                    }}
-                                                    className={`group rounded-[1.5rem] border-2 p-5 text-left transition-all active:scale-[0.98] ${isSelected ? "border-orange-500 bg-orange-50 shadow-xl shadow-orange-100" : "border-stone-200 bg-white hover:border-orange-300 hover:shadow-lg"}`}
-                                                >
-                                                    <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">
-                                                        <CategoryIcon className="h-6 w-6" />
-                                                    </div>
-                                                    <h3 className="text-lg font-black text-stone-900">{category.label}</h3>
-                                                    <p className="mt-2 text-sm font-medium text-stone-500">{eventCategoryDescriptions[category.id] || "Creative production projects"}</p>
-                                                    <p className="mt-4 text-xs font-black uppercase tracking-wide text-orange-600">{category.options.length} types</p>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {selectedEventCategory && (
-                                        <div className="rounded-[1.75rem] border border-orange-100 bg-orange-50 p-4 md:p-6">
-                                            <div className="mb-4 flex items-center justify-between gap-3">
-                                                <div>
-                                                    <p className="text-xs font-black uppercase tracking-wide text-orange-600">Choose specific shoot type</p>
-                                                    <h3 className="text-xl font-black text-stone-900">{selectedEventCategory.label}</h3>
-                                                </div>
-                                                <button type="button" onClick={() => setSelectedEventCategoryId("")} className="text-sm font-bold text-stone-500 hover:text-stone-900">Change</button>
+                                    {!selectedEventCategory && (
+                                        <>
+                                            <div className="relative">
+                                                <Search className="w-5 h-5 text-stone-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                                                <input
+                                                    type="search"
+                                                    value={eventTypeSearch}
+                                                    onChange={(event) => setEventTypeSearch(event.target.value)}
+                                                    placeholder="Search event or project type"
+                                                    className="w-full pl-12 pr-4 py-4 rounded-2xl border border-stone-200 bg-stone-50 text-stone-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                                />
                                             </div>
-                                            <div className="grid sm:grid-cols-2 gap-3">
-                                                {selectedEventCategory.options.map((option) => {
-                                                    const isSelected = selectedEventType === option.id;
-                                                    return (
-                                                        <button
-                                                            key={option.id}
-                                                            type="button"
-                                                            onClick={() => setSelectedEventType(option.id)}
-                                                            className={`rounded-2xl border-2 p-4 text-left text-sm font-black transition-all ${isSelected ? "border-orange-500 bg-white text-orange-700 shadow-lg shadow-orange-100" : "border-orange-100 bg-white/70 text-stone-700 hover:border-orange-300"}`}
-                                                        >
-                                                            {option.label}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                            {selectedEventType === CUSTOM_EVENT_TYPE_ID && (
-                                                <div className="mt-4">
-                                                    <label htmlFor="custom-event-type" className="block text-sm font-bold text-stone-700 mb-2">Custom requirement</label>
-                                                    <input
-                                                        id="custom-event-type"
-                                                        type="text"
-                                                        value={customEventType}
-                                                        onChange={(event) => setCustomEventType(event.target.value)}
-                                                        placeholder="Describe your shoot/project type"
-                                                        className="w-full p-4 rounded-xl border border-orange-100 bg-white text-stone-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                            <div className="grid gap-4 md:grid-cols-2">
+                                                {filteredEventCategories.map((category) => (
+                                                    <EventCategoryCard
+                                                        key={category.id}
+                                                        category={category}
+                                                        description={eventCategoryDescriptions[category.id] || "Creative production projects"}
+                                                        tone="orange"
+                                                        onClick={() => handleQuickCategorySelect(category.id)}
                                                     />
-                                                </div>
-                                            )}
-                                        </div>
+                                                ))}
+                                            </div>
+                                        </>
                                     )}
 
-                                    {selectedEventType && (
-                                        <div className="rounded-2xl border border-stone-100 bg-stone-50 p-4">
-                                            <p className="text-sm font-bold text-stone-500">Selected</p>
-                                            <p className="text-lg font-black text-stone-900">{selectedEventLabel}</p>
-                                        </div>
+                                    {selectedEventCategory && (
+                                        <EventSubcategoryPanel
+                                            category={selectedEventCategory}
+                                            selectedEventType={selectedEventType}
+                                            customEventType={customEventType}
+                                            tone="orange"
+                                            onChangeCategory={handleQuickCategoryChange}
+                                            onSelectEvent={setSelectedEventType}
+                                            onCustomEventChange={setCustomEventType}
+                                        />
                                     )}
 
                                     <div className="sticky bottom-4 z-10 rounded-2xl bg-white/95 p-3 shadow-xl shadow-stone-200/70 backdrop-blur md:static md:p-0 md:shadow-none">
+                                        {selectedEventType && (
+                                            <div className="mb-3 rounded-2xl border border-stone-100 bg-stone-50 p-4">
+                                                <p className="text-sm font-bold text-stone-500">Selected</p>
+                                                <p className="text-lg font-black text-stone-900">{selectedEventLabel}</p>
+                                            </div>
+                                        )}
                                         <button
                                             onClick={() => {
                                                 if (!selectedEventType) { toast.error("Select an event or project type."); return; }
@@ -1018,13 +1022,21 @@ export default function BookingFlow() {
                                             );
                                         })}
                                     </div>
-                                    {selectedEventType && (
+                                    {suggestedSetup && (
                                         <div className="rounded-[1.5rem] border border-orange-100 bg-orange-50 p-4 md:p-5">
                                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                                <div>
+                                                <div className="min-w-0">
                                                     <p className="text-xs font-black uppercase tracking-wide text-orange-600">Suggested setup</p>
-                                                    <h3 className="font-black text-stone-900">Most {selectedEventLabel.toLowerCase()} requests use a small starter crew.</h3>
-                                                    <p className="mt-1 text-sm text-stone-600">You can add the suggestion, then adjust quantities below.</p>
+                                                    <h3 className="font-black text-stone-900">{suggestedSetup.title}</h3>
+                                                    <p className="mt-1 text-sm text-stone-600">{suggestedSetup.rationale}</p>
+                                                    <div className="mt-3 flex flex-wrap gap-2">
+                                                        {suggestedPreviewItems.slice(0, 10).map((item) => (
+                                                            <span key={item} className="rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-bold text-stone-700">
+                                                                {item}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                    <p className="mt-3 text-xs font-bold text-stone-500">Add this industry-standard setup, then remove items or adjust quantities below.</p>
                                                 </div>
                                                 <button type="button" onClick={addSuggestedSetup} className="rounded-xl bg-orange-600 px-5 py-3 text-sm font-black text-white hover:bg-orange-700">
                                                     Add Suggested Setup
@@ -1500,15 +1512,38 @@ export default function BookingFlow() {
                                     <p className="text-stone-500 mb-8">Submit a professional RFQ. Creators and production teams can show interest or quote, and you choose later.</p>
                                     <div className="grid md:grid-cols-2 gap-4">
                                         <input value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} placeholder="Project title, e.g. Brand launch film" className="md:col-span-2 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" />
-                                        <select value={projectEventType} onChange={(event) => setProjectEventType(event.target.value)} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500">
-                                            <option value="">Choose project type</option>
-                                            {BOOKING_EVENT_CATEGORIES.map((category) => (
-                                                <optgroup key={category.id} label={category.label}>
-                                                    {category.options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-                                                </optgroup>
-                                            ))}
-                                        </select>
-                                        <input value={projectEventType === CUSTOM_EVENT_TYPE_ID ? projectCustomEventType : projectObjective} onChange={(event) => projectEventType === CUSTOM_EVENT_TYPE_ID ? setProjectCustomEventType(event.target.value) : setProjectObjective(event.target.value)} placeholder={projectEventType === CUSTOM_EVENT_TYPE_ID ? "Describe project type" : "Objective / goal"} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" />
+                                        <div className="md:col-span-2 space-y-4 rounded-2xl border border-rose-100 bg-rose-50/50 p-4">
+                                            {!selectedProjectEventCategory ? (
+                                                <>
+                                                    <div>
+                                                        <p className="text-xs font-black uppercase tracking-wide text-rose-600">Choose project category</p>
+                                                        <p className="mt-1 text-sm text-stone-500">Pick the broad project type first, then choose the exact requirement.</p>
+                                                    </div>
+                                                    <div className="grid gap-3 md:grid-cols-2">
+                                                        {BOOKING_EVENT_CATEGORIES.map((category) => (
+                                                            <EventCategoryCard
+                                                                key={category.id}
+                                                                category={category}
+                                                                description={eventCategoryDescriptions[category.id] || "Creative production projects"}
+                                                                tone="rose"
+                                                                onClick={() => handleProjectCategorySelect(category.id)}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <EventSubcategoryPanel
+                                                    category={selectedProjectEventCategory}
+                                                    selectedEventType={projectEventType}
+                                                    customEventType={projectCustomEventType}
+                                                    tone="rose"
+                                                    onChangeCategory={handleProjectCategoryChange}
+                                                    onSelectEvent={setProjectEventType}
+                                                    onCustomEventChange={setProjectCustomEventType}
+                                                />
+                                            )}
+                                        </div>
+                                        <input value={projectObjective} onChange={(event) => setProjectObjective(event.target.value)} placeholder="Objective / goal" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" />
                                         <textarea value={projectDescription} onChange={(event) => setProjectDescription(event.target.value)} rows={4} placeholder="Describe the project, expected output, brand/event context, and must-have details." className="md:col-span-2 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" />
                                         <input value={projectAudience} onChange={(event) => setProjectAudience(event.target.value)} placeholder="Target audience / use case" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" />
                                         <input value={projectDeliverables} onChange={(event) => setProjectDeliverables(event.target.value)} placeholder="Deliverables, e.g. 1 ad film, 5 reels, 20 photos" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500" />
@@ -1956,6 +1991,119 @@ export default function BookingFlow() {
                 </AnimatePresence>
             </div>
         </main>
+    );
+}
+
+const eventSelectorToneClasses = {
+    orange: {
+        icon: "bg-orange-100 text-orange-600",
+        cardSelected: "border-orange-500 bg-orange-50 shadow-xl shadow-orange-100",
+        cardIdle: "border-stone-200 bg-white hover:border-orange-300 hover:shadow-lg",
+        panel: "border-orange-100 bg-orange-50",
+        text: "text-orange-600",
+        optionSelected: "border-orange-500 bg-white text-orange-700 shadow-lg shadow-orange-100",
+        optionIdle: "border-orange-100 bg-white/80 text-stone-700 hover:border-orange-300",
+        input: "focus:border-orange-500 focus:ring-orange-500 border-orange-100",
+    },
+    rose: {
+        icon: "bg-rose-100 text-rose-600",
+        cardSelected: "border-rose-500 bg-rose-50 shadow-xl shadow-rose-100",
+        cardIdle: "border-stone-200 bg-white hover:border-rose-300 hover:shadow-lg",
+        panel: "border-rose-100 bg-rose-50",
+        text: "text-rose-600",
+        optionSelected: "border-rose-500 bg-white text-rose-700 shadow-lg shadow-rose-100",
+        optionIdle: "border-rose-100 bg-white/80 text-stone-700 hover:border-rose-300",
+        input: "focus:border-rose-500 focus:ring-rose-500 border-rose-100",
+    },
+};
+
+function EventCategoryCard({
+    category,
+    description,
+    tone,
+    onClick,
+}: {
+    category: BookingCategory;
+    description: string;
+    tone: keyof typeof eventSelectorToneClasses;
+    onClick: () => void;
+}) {
+    const CategoryIcon = category.icon;
+    const classes = eventSelectorToneClasses[tone];
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`group rounded-[1.5rem] border-2 p-6 text-left transition-all active:scale-[0.98] ${classes.cardIdle}`}
+        >
+            <div className={`mb-6 flex h-14 w-14 items-center justify-center rounded-2xl ${classes.icon}`}>
+                <CategoryIcon className="h-6 w-6" />
+            </div>
+            <h3 className="text-xl font-black text-stone-900">{category.label}</h3>
+            <p className="mt-3 text-sm font-medium text-stone-500">{description}</p>
+            <p className={`mt-5 text-xs font-black uppercase tracking-wide ${classes.text}`}>{category.options.length} types</p>
+        </button>
+    );
+}
+
+function EventSubcategoryPanel({
+    category,
+    selectedEventType,
+    customEventType,
+    tone,
+    onChangeCategory,
+    onSelectEvent,
+    onCustomEventChange,
+}: {
+    category: BookingCategory;
+    selectedEventType: string;
+    customEventType: string;
+    tone: keyof typeof eventSelectorToneClasses;
+    onChangeCategory: () => void;
+    onSelectEvent: (eventType: string) => void;
+    onCustomEventChange: (value: string) => void;
+}) {
+    const classes = eventSelectorToneClasses[tone];
+    return (
+        <div className={`rounded-[1.75rem] border p-5 md:p-6 ${classes.panel}`}>
+            <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                    <p className={`text-xs font-black uppercase tracking-wide ${classes.text}`}>Choose specific shoot type</p>
+                    <h3 className="text-2xl font-black text-stone-900">{category.label}</h3>
+                </div>
+                <button type="button" onClick={onChangeCategory} className="text-sm font-bold text-stone-500 hover:text-stone-900">
+                    Change
+                </button>
+            </div>
+            <div className="grid gap-3">
+                {category.options.map((option) => {
+                    const isSelected = selectedEventType === option.id;
+                    return (
+                        <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => onSelectEvent(option.id)}
+                            className={`rounded-2xl border-2 p-4 text-left text-base font-black transition-all active:scale-[0.99] ${isSelected ? classes.optionSelected : classes.optionIdle}`}
+                        >
+                            {option.label}
+                        </button>
+                    );
+                })}
+            </div>
+            {selectedEventType === CUSTOM_EVENT_TYPE_ID && (
+                <div className="mt-4">
+                    <label htmlFor={`${tone}-custom-event-type`} className="mb-2 block text-sm font-bold text-stone-700">Custom requirement</label>
+                    <input
+                        id={`${tone}-custom-event-type`}
+                        type="text"
+                        value={customEventType}
+                        onChange={(event) => onCustomEventChange(event.target.value)}
+                        placeholder="Describe your shoot/project type"
+                        className={`w-full rounded-xl border bg-white p-4 text-stone-900 outline-none focus:ring-1 ${classes.input}`}
+                    />
+                </div>
+            )}
+        </div>
     );
 }
 
