@@ -140,6 +140,10 @@ function getBudgetFit(
     budget: number,
     estimatedDays: number
 ) {
+    if (!budget || budget <= 0) {
+        return { eligible: true, score: 5, reason: "Budget guidance requested" };
+    }
+
     const dayRate = Number(creator.day_rate || 0);
     if (dayRate <= 0) {
         return { eligible: true, score: 5, reason: "No day rate listed" };

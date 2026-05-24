@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/server";
-import { sanitizeScriptAnalysis, scriptAnalysisJsonSchema } from "@/lib/ai/scriptAnalysis";
+import {
+    createFallbackScriptAnalysis,
+    sanitizeScriptAnalysis,
+    scriptAnalysisJsonSchema,
+    type ScriptAnalysisResult,
+} from "@/lib/ai/scriptAnalysis";
 
 export const runtime = "nodejs";
 
@@ -30,6 +35,161 @@ function extractOutputText(response: Record<string, unknown>) {
     return "";
 }
 
+function extractJsonObject(text: string) {
+    const cleaned = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+        throw new Error("AI response did not contain a JSON object.");
+    }
+    return cleaned.slice(firstBrace, lastBrace + 1);
+}
+
+function buildAnalysisPrompt(scriptText: string) {
+    return `Create a professional Indian film, commercial, event, and digital-content production breakdown for this script or brief.
+
+Return only valid JSON with these exact keys:
+project_summary, detected_project_type, complexity_level, confidence, missing_information, recommended_crew, suggested_equipment, estimated_duration, post_production_time, locations, shot_requirements, props_art_direction, audio_requirements, lighting_requirements, permissions, risks_or_challenges, budget_range, production_checklist, vendor_matching_tags.
+
+Crew items must use: { "role": string, "quantity": number, "reason": string }.
+Equipment items must use: { "name": string, "quantity": number, "reason": string, "estimated_price_per_day": number }.
+complexity_level must be low, medium, or high. confidence must be High, Medium, or Low.
+
+Script / brief:
+${scriptText}`;
+}
+
+async function analyzeWithGemini(scriptText: string) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return null;
+
+    const model = process.env.GEMINI_SCRIPT_ANALYSIS_MODEL || "gemini-2.0-flash";
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            contents: [
+                {
+                    role: "user",
+                    parts: [{ text: buildAnalysisPrompt(scriptText) }],
+                },
+            ],
+            generationConfig: {
+                responseMimeType: "application/json",
+                temperature: 0.2,
+            },
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Gemini script analysis failed: ${await response.text()}`);
+    }
+
+    const payload = await response.json() as Record<string, unknown>;
+    const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+    const firstCandidate = candidates[0] as { content?: { parts?: Array<{ text?: string }> } } | undefined;
+    const outputText = firstCandidate?.content?.parts?.map((part) => part.text || "").join("\n") || "";
+    return sanitizeScriptAnalysis(JSON.parse(extractJsonObject(outputText)));
+}
+
+async function analyzeWithOpenRouter(scriptText: string) {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) return null;
+
+    const model = process.env.OPENROUTER_SCRIPT_ANALYSIS_MODEL || "google/gemma-3-27b-it:free";
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://www.shotcutcrew.com",
+            "X-Title": "ShotcutCrew Script Analysis",
+        },
+        body: JSON.stringify({
+            model,
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a senior production manager. Return only valid JSON. Do not use markdown.",
+                },
+                { role: "user", content: buildAnalysisPrompt(scriptText) },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.2,
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`OpenRouter script analysis failed: ${await response.text()}`);
+    }
+
+    const payload = await response.json() as Record<string, unknown>;
+    const choices = Array.isArray(payload.choices) ? payload.choices : [];
+    const firstChoice = choices[0] as { message?: { content?: string } } | undefined;
+    const outputText = firstChoice?.message?.content || "";
+    return sanitizeScriptAnalysis(JSON.parse(extractJsonObject(outputText)));
+}
+
+async function analyzeWithOpenAI(scriptText: string) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return null;
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            model: process.env.OPENAI_SCRIPT_ANALYSIS_MODEL || "gpt-4o-mini",
+            input: [
+                {
+                    role: "system",
+                    content: "You are a senior Indian film, commercial, event, and digital-content line producer. Break down scripts and briefs into practical production requirements. Return only JSON matching the schema.",
+                },
+                {
+                    role: "user",
+                    content: buildAnalysisPrompt(scriptText),
+                },
+            ],
+            text: {
+                format: {
+                    type: "json_schema",
+                    name: "shotcutcrew_script_analysis",
+                    strict: true,
+                    schema: scriptAnalysisJsonSchema,
+                },
+            },
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`OpenAI script analysis failed: ${await response.text()}`);
+    }
+
+    const raw = await response.json() as Record<string, unknown>;
+    return sanitizeScriptAnalysis(JSON.parse(extractOutputText(raw)));
+}
+
+async function runScriptAnalysis(scriptText: string): Promise<ScriptAnalysisResult> {
+    const providers = [
+        { name: "Gemini", analyze: analyzeWithGemini },
+        { name: "OpenRouter", analyze: analyzeWithOpenRouter },
+        { name: "OpenAI", analyze: analyzeWithOpenAI },
+    ];
+
+    for (const provider of providers) {
+        try {
+            const analysis = await provider.analyze(scriptText);
+            if (analysis) return analysis;
+        } catch (error) {
+            console.error(`${provider.name} script analysis provider error:`, error);
+        }
+    }
+
+    return createFallbackScriptAnalysis(scriptText);
+}
+
 export async function POST(request: Request) {
     try {
         const body = await request.json();
@@ -43,56 +203,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Script is too long. Please upload a shorter excerpt or summary." }, { status: 413 });
         }
 
-        const apiKey = process.env.OPENAI_API_KEY;
-        if (!apiKey) {
-            return NextResponse.json({ error: "OPENAI_API_KEY is not configured." }, { status: 503 });
-        }
-
         const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
             return NextResponse.json({ error: "Login is required to analyze a script." }, { status: 401 });
         }
 
-        const response = await fetch("https://api.openai.com/v1/responses", {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                model: process.env.OPENAI_SCRIPT_ANALYSIS_MODEL || "gpt-4o-mini",
-                input: [
-                    {
-                        role: "system",
-                        content: "You are a senior Indian film, commercial, event, and digital-content line producer. Break down scripts and briefs into practical production requirements. Return only JSON matching the schema.",
-                    },
-                    {
-                        role: "user",
-                        content: `Create a professional production breakdown for this script or brief. Detect scenes, logistics, crew, equipment, schedule, budget impact, permissions, risks, and vendor matching tags.\n\n${scriptText}`,
-                    },
-                ],
-                text: {
-                    format: {
-                        type: "json_schema",
-                        name: "shotcutcrew_script_analysis",
-                        strict: true,
-                        schema: scriptAnalysisJsonSchema,
-                    },
-                },
-            }),
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("OpenAI script analysis error:", errorText);
-            return NextResponse.json({ error: "AI analysis failed. Please try again." }, { status: 502 });
-        }
-
-        const raw = await response.json() as Record<string, unknown>;
-        const outputText = extractOutputText(raw);
-        const parsed = JSON.parse(outputText);
-        const analysis = sanitizeScriptAnalysis(parsed);
+        const analysis = await runScriptAnalysis(scriptText);
 
         const admin = createAdminClient();
         if (admin) {
