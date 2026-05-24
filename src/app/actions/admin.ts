@@ -102,3 +102,36 @@ export const verifyCreator = await withAdminAuth(async (creatorId: string, verif
     revalidatePath("/admin/users");
     return { success: true };
 });
+
+export const verifyEquipmentVendor = await withAdminAuth(async (userId: string, verify: boolean) => {
+    const admin = createAdminClient();
+
+    const { data: profile, error: profileError } = await admin
+        .from("users")
+        .select("id, full_name, account_type")
+        .eq("id", userId)
+        .single();
+
+    if (profileError || !profile || profile.account_type !== "equipment_vendor") {
+        throw new Error("Equipment vendor user profile was not found.");
+    }
+
+    const { error } = await admin
+        .from("provider_profiles")
+        .update({ verified: verify, updated_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("provider_type", "equipment_vendor");
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    await logAdminAction(
+        verify ? "VERIFY_EQUIPMENT_VENDOR_GRANT" : "VERIFY_EQUIPMENT_VENDOR_REVOKE",
+        userId,
+        { previous_state: !verify }
+    );
+
+    revalidatePath("/admin/users");
+    return { success: true };
+});

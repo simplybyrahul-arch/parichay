@@ -5,6 +5,7 @@ import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js'
 import { createClient } from '@/utils/supabase/server'
+import { calculateProfileCompletion } from '@/lib/equipment/vendors'
 import { rateLimit } from '@/utils/rate-limit'
 import {
     AUTH_RATE_LIMIT_WINDOW_MS,
@@ -115,6 +116,10 @@ export async function login(formData: FormData): Promise<AuthActionResult | neve
 
     if (accountType === 'creator') {
         redirect('/creator-dashboard')
+    } else if (accountType === 'equipment_vendor') {
+        redirect('/vendor-dashboard')
+    } else if (accountType === 'admin') {
+        redirect('/admin')
     } else {
         // Default to client dashboard
         redirect('/dashboard')
@@ -138,6 +143,16 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
     const availableForBooking = toBoolean(formData.get('available_for_booking'), true)
     const budgetFlexibility = toBoolean(formData.get('budget_flexibility'), false)
     const travelEnabled = toBoolean(formData.get('travel_enabled'), false)
+    const vendorContactName = String(formData.get('vendor_contact_name') || '').trim()
+    const vendorWarehouseAddress = String(formData.get('vendor_warehouse_address') || '').trim()
+    const vendorGstNumber = String(formData.get('vendor_gst_number') || '').trim()
+    const vendorYearsInBusiness = toPositiveNumber(formData.get('vendor_years_in_business'))
+    const vendorDeliveryAvailable = toBoolean(formData.get('vendor_delivery_available'), false)
+    const vendorOperatorSupport = toBoolean(formData.get('vendor_operator_support_available'), false)
+    const vendorEquipmentCategories = String(formData.get('vendor_equipment_categories') || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
 
     if (!isValidEmail(email) || !password || !name) {
         return { success: false, message: 'Invalid registration payload provided.' }
@@ -153,6 +168,13 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
         const cleanedPhone = phone.replace(/[^\d+]/g, '')
         if (!creatorType || !role || !city || cleanedPhone.length < 10) {
             return { success: false, message: 'Creator phone, city, and primary service are required.' }
+        }
+    }
+
+    if (accountType === 'equipment_vendor') {
+        const cleanedPhone = phone.replace(/[^\d+]/g, '')
+        if (!name.trim() || !vendorContactName || !city || cleanedPhone.length < 10 || !vendorWarehouseAddress || vendorEquipmentCategories.length === 0) {
+            return { success: false, message: 'Vendor business name, contact, phone, city, warehouse address, and equipment categories are required.' }
         }
     }
 
@@ -178,6 +200,21 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
                     budget_flexibility: budgetFlexibility,
                     travel_enabled: travelEnabled,
                 } : {}),
+                ...(accountType === 'equipment_vendor' ? {
+                    provider_type: 'equipment_vendor',
+                    provider_subtype: 'rental_house',
+                    contact_name: vendorContactName,
+                    phone,
+                    whatsapp_phone: whatsappPhone || phone,
+                    city,
+                    state,
+                    warehouse_address: vendorWarehouseAddress,
+                    gst_number: vendorGstNumber,
+                    years_in_business: vendorYearsInBusiness,
+                    delivery_available: vendorDeliveryAvailable,
+                    operator_support_available: vendorOperatorSupport,
+                    equipment_categories: vendorEquipmentCategories,
+                } : {}),
             }
         }
     }
@@ -191,6 +228,17 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
     if (accountType === 'creator' && signupData.user) {
         const admin = createOptionalAdminClient();
         if (admin) {
+            await admin.from('provider_profiles').upsert({
+                user_id: signupData.user.id,
+                provider_type: 'creator',
+                provider_subtype: creatorType === 'studio_owner' ? 'studio' : 'freelancer',
+                business_name: name.trim(),
+                contact_name: name.trim(),
+                city,
+                state: state || null,
+                profile_completion: 40,
+            }, { onConflict: 'user_id' });
+
             const { error: creatorError } = await admin.from('creators').upsert({
                 id: signupData.user.id,
                 slug: createSlug(name.trim(), signupData.user.id),
@@ -211,6 +259,59 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
 
             if (creatorError) {
                 console.error('Creator profile signup upsert error:', creatorError);
+            }
+        }
+    }
+
+    if (accountType === 'equipment_vendor' && signupData.user) {
+        const admin = createOptionalAdminClient();
+        if (admin) {
+            const profileCompletion = calculateProfileCompletion({
+                businessName: name,
+                contactName: vendorContactName,
+                city,
+                phone,
+                warehouseAddress: vendorWarehouseAddress,
+                equipmentCategories: vendorEquipmentCategories,
+                deliveryAvailable: vendorDeliveryAvailable,
+            });
+
+            const { data: providerProfile, error: providerError } = await admin
+                .from('provider_profiles')
+                .upsert({
+                    user_id: signupData.user.id,
+                    provider_type: 'equipment_vendor',
+                    provider_subtype: 'rental_house',
+                    business_name: name.trim(),
+                    contact_name: vendorContactName,
+                    city,
+                    state: state || null,
+                    profile_completion: profileCompletion,
+                    verified: false,
+                }, { onConflict: 'user_id' })
+                .select('id')
+                .single();
+
+            if (providerError || !providerProfile) {
+                console.error('Equipment vendor provider signup upsert error:', providerError);
+            } else {
+                const { error: vendorError } = await admin
+                    .from('equipment_vendor_profiles')
+                    .upsert({
+                        provider_id: providerProfile.id,
+                        phone,
+                        whatsapp_phone: whatsappPhone || phone,
+                        warehouse_address: vendorWarehouseAddress,
+                        gst_number: vendorGstNumber || null,
+                        years_in_business: vendorYearsInBusiness || null,
+                        delivery_available: vendorDeliveryAvailable,
+                        operator_support_available: vendorOperatorSupport,
+                        equipment_categories: vendorEquipmentCategories,
+                    }, { onConflict: 'provider_id' });
+
+                if (vendorError) {
+                    console.error('Equipment vendor profile signup upsert error:', vendorError);
+                }
             }
         }
     }

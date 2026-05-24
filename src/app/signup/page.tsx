@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Mail, Lock, User, Briefcase, Building2, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Mail, Lock, User, Briefcase, Building2, Eye, EyeOff, PackageCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { signup } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
 import { creatorServiceOptions } from "@/lib/creators/services";
 import { validatePasswordStrength } from "@/utils/auth-security";
+import { EQUIPMENT_VENDOR_CATEGORIES } from "@/lib/equipment/vendors";
 
 export default function SignupPage() {
-    const [accountType, setAccountType] = useState<"client" | "creator" | null>(null);
+    const [accountType, setAccountType] = useState<"client" | "creator" | "equipment_vendor" | null>(null);
     const [creatorType, setCreatorType] = useState<"studio_owner" | "freelancer" | null>(null);
     const [step, setStep] = useState(1); // 1=account type, 2=creator sub-type, 3=credentials
     const [formData, setFormData] = useState({ name: "", email: "", password: "", confirmPassword: "" });
@@ -27,6 +28,19 @@ export default function SignupPage() {
         travelEnabled: false,
         budgetFlexibility: false,
     });
+    const [vendorForm, setVendorForm] = useState({
+        contactName: "",
+        phone: "",
+        whatsappPhone: "",
+        city: "",
+        state: "",
+        warehouseAddress: "",
+        gstNumber: "",
+        yearsInBusiness: "",
+        deliveryAvailable: true,
+        operatorSupportAvailable: false,
+        equipmentCategories: [] as string[],
+    });
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
     const [signupComplete, setSignupComplete] = useState(false);
@@ -35,13 +49,24 @@ export default function SignupPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-    const handleTypeSelection = (type: "client" | "creator") => {
+    const handleTypeSelection = (type: "client" | "creator" | "equipment_vendor") => {
         setAccountType(type);
         if (type === "client") {
             setStep(3);
-        } else {
+        } else if (type === "creator") {
             setStep(2);
+        } else {
+            setStep(3);
         }
+    };
+
+    const toggleVendorCategory = (categoryId: string) => {
+        setVendorForm((current) => ({
+            ...current,
+            equipmentCategories: current.equipmentCategories.includes(categoryId)
+                ? current.equipmentCategories.filter((id) => id !== categoryId)
+                : [...current.equipmentCategories, categoryId],
+        }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -104,6 +129,35 @@ export default function SignupPage() {
             }
         }
 
+        if (accountType === "equipment_vendor") {
+            const cleanedPhone = vendorForm.phone.replace(/[^\d+]/g, "");
+            if (!vendorForm.contactName.trim()) {
+                setErrorMsg("Please enter the owner/contact name.");
+                setLoading(false);
+                return;
+            }
+            if (cleanedPhone.length < 10) {
+                setErrorMsg("Please enter a valid business phone number.");
+                setLoading(false);
+                return;
+            }
+            if (!vendorForm.city.trim()) {
+                setErrorMsg("Please enter your vendor city.");
+                setLoading(false);
+                return;
+            }
+            if (!vendorForm.warehouseAddress.trim()) {
+                setErrorMsg("Please enter your warehouse or store address.");
+                setLoading(false);
+                return;
+            }
+            if (vendorForm.equipmentCategories.length === 0) {
+                setErrorMsg("Please select at least one equipment category.");
+                setLoading(false);
+                return;
+            }
+        }
+
         try {
             const data = new FormData();
             data.append("name", formData.name);
@@ -120,6 +174,19 @@ export default function SignupPage() {
             data.append("available_for_booking", String(creatorForm.availableForBooking));
             data.append("travel_enabled", String(creatorForm.travelEnabled));
             data.append("budget_flexibility", String(creatorForm.budgetFlexibility));
+            if (accountType === "equipment_vendor") {
+                data.set("phone", vendorForm.phone);
+                data.set("whatsapp_phone", vendorForm.whatsappPhone || vendorForm.phone);
+                data.set("city", vendorForm.city);
+                data.set("state", vendorForm.state);
+                data.append("vendor_contact_name", vendorForm.contactName);
+                data.append("vendor_warehouse_address", vendorForm.warehouseAddress);
+                data.append("vendor_gst_number", vendorForm.gstNumber);
+                data.append("vendor_years_in_business", vendorForm.yearsInBusiness);
+                data.append("vendor_delivery_available", String(vendorForm.deliveryAvailable));
+                data.append("vendor_operator_support_available", String(vendorForm.operatorSupportAvailable));
+                data.append("vendor_equipment_categories", vendorForm.equipmentCategories.join(","));
+            }
 
             const result = await signup(data, accountType || "client", creatorType || undefined);
             if (!result.success) {
@@ -193,10 +260,10 @@ export default function SignupPage() {
                                 Join the Platform
                             </h1>
                             <p className="text-stone-500 font-medium pb-8 text-center px-4">
-                                Are you looking to hire a crew, or offer your creative services?
+                                Choose how you want to use ShotcutCrew.
                             </p>
 
-                            <div className="grid md:grid-cols-2 gap-4">
+                            <div className="grid md:grid-cols-3 gap-4">
                                 {/* Client Option */}
                                 <button
                                     type="button"
@@ -207,10 +274,10 @@ export default function SignupPage() {
                                         <Briefcase className="w-6 h-6" />
                                     </div>
                                     <h3 className="font-bold text-stone-900 text-xl font-display mb-2 group-hover:text-orange-600 transition-colors">Client</h3>
-                                    <p className="text-stone-500 text-sm">I want to hire verified production crews and talent.</p>
+                                    <p className="text-stone-500 text-sm">Hire creators, studios, and equipment providers.</p>
                                 </button>
 
-                                {/* Studio Owner / Freelancer Option */}
+                                {/* Creative Professional Option */}
                                 <button
                                     type="button"
                                     onClick={() => handleTypeSelection("creator")}
@@ -219,8 +286,21 @@ export default function SignupPage() {
                                     <div className="w-12 h-12 bg-white rounded-xl shadow-sm text-rose-600 flex items-center justify-center mb-4">
                                         <Building2 className="w-6 h-6" />
                                     </div>
-                                    <h3 className="font-bold text-stone-900 text-xl font-display mb-2 group-hover:text-rose-600 transition-colors">Studio Owner / Freelancer</h3>
-                                    <p className="text-stone-500 text-sm">I want to offer creative services and accept booking requests.</p>
+                                    <h3 className="font-bold text-stone-900 text-xl font-display mb-2 group-hover:text-rose-600 transition-colors">Creative Professional</h3>
+                                    <p className="text-stone-500 text-sm">Offer photography, video, editing, and production services.</p>
+                                </button>
+
+                                {/* Equipment Vendor Option */}
+                                <button
+                                    type="button"
+                                    onClick={() => handleTypeSelection("equipment_vendor")}
+                                    className="p-6 border-2 border-transparent bg-stone-50 rounded-2xl hover:border-violet-500 hover:bg-violet-50 transition-all text-left group relative overflow-hidden"
+                                >
+                                    <div className="w-12 h-12 bg-white rounded-xl shadow-sm text-violet-600 flex items-center justify-center mb-4">
+                                        <PackageCheck className="w-6 h-6" />
+                                    </div>
+                                    <h3 className="font-bold text-stone-900 text-xl font-display mb-2 group-hover:text-violet-600 transition-colors">Equipment Vendor</h3>
+                                    <p className="text-stone-500 text-sm">Rent cameras, lights, drones, audio gear, and production tools.</p>
                                 </button>
                             </div>
 
@@ -252,7 +332,7 @@ export default function SignupPage() {
                                 How do you work?
                             </h1>
                             <p className="text-stone-500 font-medium pb-8 text-sm">
-                                Select the option that best describes your setup.
+                                What best describes your creative business?
                             </p>
 
                             <div className="grid md:grid-cols-2 gap-4">
@@ -264,7 +344,7 @@ export default function SignupPage() {
                                     <div className="w-12 h-12 bg-white rounded-xl shadow-sm text-rose-600 flex items-center justify-center mb-4">
                                         <Building2 className="w-6 h-6" />
                                     </div>
-                                    <h3 className="font-bold text-stone-900 text-xl font-display mb-2 group-hover:text-rose-600 transition-colors">Studio Owner</h3>
+                                    <h3 className="font-bold text-stone-900 text-xl font-display mb-2 group-hover:text-rose-600 transition-colors">Production Studio</h3>
                                     <p className="text-stone-500 text-sm">I run a production studio and offer professional crew services.</p>
                                 </button>
 
@@ -296,12 +376,14 @@ export default function SignupPage() {
                             </button>
 
                             <h1 className="text-3xl font-black tracking-tight text-stone-900 mb-2 font-display">
-                                {accountType === "client" ? "Create Client Account" : creatorType === "studio_owner" ? "Create Studio Profile" : "Create Freelancer Profile"}
+                                {accountType === "client" ? "Create Client Account" : accountType === "equipment_vendor" ? "Create Equipment Vendor Profile" : creatorType === "studio_owner" ? "Create Studio Profile" : "Create Freelancer Profile"}
                             </h1>
                             <p className="text-stone-500 font-medium pb-6 border-b border-stone-100 mb-6">
                                 {accountType === "client"
                                     ? "Start hiring top-tier talent in minutes."
-                                    : "Build your portfolio to start receiving briefs."}
+                                    : accountType === "equipment_vendor"
+                                        ? "List your rental business and receive equipment availability requests."
+                                        : "Build your portfolio to start receiving briefs."}
                             </p>
 
                             {errorMsg && (
@@ -319,7 +401,7 @@ export default function SignupPage() {
                                             type="text"
                                             value={formData.name}
                                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                            placeholder={accountType === "client" ? "Your full name" : creatorType === "studio_owner" ? "Your studio name" : "Your full name"}
+                                            placeholder={accountType === "client" ? "Your full name" : accountType === "equipment_vendor" ? "Business / rental house name" : creatorType === "studio_owner" ? "Your studio name" : "Your full name"}
                                             required
                                             className="w-full pl-12 pr-4 py-4 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
                                         />
@@ -449,6 +531,70 @@ export default function SignupPage() {
                                     </div>
                                 )}
 
+                                {accountType === "equipment_vendor" && (
+                                    <div className="space-y-5 rounded-2xl border border-violet-100 bg-violet-50/50 p-5">
+                                        <div>
+                                            <h2 className="text-sm font-black uppercase tracking-wide text-stone-700">
+                                                Equipment rental business details
+                                            </h2>
+                                            <p className="text-xs text-stone-500 mt-1">
+                                                These details help ShotcutCrew match rental requests to your inventory and service area.
+                                            </p>
+                                        </div>
+
+                                        <div className="grid md:grid-cols-2 gap-4">
+                                            <VendorInput label="Owner / Contact Name" value={vendorForm.contactName} onChange={(value) => setVendorForm({ ...vendorForm, contactName: value })} placeholder="Primary contact person" required />
+                                            <VendorInput label="Phone Number" type="tel" value={vendorForm.phone} onChange={(value) => setVendorForm({ ...vendorForm, phone: value })} placeholder="10 digit business number" required />
+                                            <VendorInput label="WhatsApp Number" type="tel" value={vendorForm.whatsappPhone} onChange={(value) => setVendorForm({ ...vendorForm, whatsappPhone: value })} placeholder="Leave blank to use phone" />
+                                            <VendorInput label="Years in Business" type="number" value={vendorForm.yearsInBusiness} onChange={(value) => setVendorForm({ ...vendorForm, yearsInBusiness: value })} placeholder="e.g. 3" />
+                                            <VendorInput label="City" value={vendorForm.city} onChange={(value) => setVendorForm({ ...vendorForm, city: value })} placeholder="e.g. Bilaspur" required />
+                                            <VendorInput label="State" value={vendorForm.state} onChange={(value) => setVendorForm({ ...vendorForm, state: value })} placeholder="e.g. Chhattisgarh" />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-bold text-stone-700 mb-1.5">Warehouse / Store Address</label>
+                                            <textarea
+                                                value={vendorForm.warehouseAddress}
+                                                onChange={(event) => setVendorForm({ ...vendorForm, warehouseAddress: event.target.value })}
+                                                rows={3}
+                                                placeholder="Rental pickup or warehouse address"
+                                                required
+                                                className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 text-stone-900 transition-colors"
+                                            />
+                                        </div>
+
+                                        <VendorInput label="GST Number optional" value={vendorForm.gstNumber} onChange={(value) => setVendorForm({ ...vendorForm, gstNumber: value })} placeholder="GSTIN if available" />
+
+                                        <div>
+                                            <div className="flex items-center justify-between gap-3 mb-3">
+                                                <label className="block text-sm font-bold text-stone-700">Equipment Categories</label>
+                                                <span className="text-xs font-bold text-violet-700">{vendorForm.equipmentCategories.length} selected</span>
+                                            </div>
+                                            <div className="grid sm:grid-cols-2 gap-2">
+                                                {EQUIPMENT_VENDOR_CATEGORIES.map((category) => {
+                                                    const selected = vendorForm.equipmentCategories.includes(category.id);
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            key={category.id}
+                                                            onClick={() => toggleVendorCategory(category.id)}
+                                                            className={`rounded-xl border px-3 py-3 text-left transition-all ${selected ? "border-violet-500 bg-white text-violet-700 shadow-sm" : "border-stone-200 bg-white text-stone-700 hover:border-violet-200"}`}
+                                                        >
+                                                            <span className="block text-sm font-black">{category.label}</span>
+                                                            <span className="mt-1 block text-xs text-stone-500">{category.description}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid sm:grid-cols-2 gap-3">
+                                            <ToggleLabel label="Delivery available" checked={vendorForm.deliveryAvailable} onChange={(checked) => setVendorForm({ ...vendorForm, deliveryAvailable: checked })} />
+                                            <ToggleLabel label="Operator support available" checked={vendorForm.operatorSupportAvailable} onChange={(checked) => setVendorForm({ ...vendorForm, operatorSupportAvailable: checked })} />
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div>
                                     <label className="block text-sm font-bold text-stone-700 mb-1.5">Password</label>
                                     <div className="relative">
@@ -532,5 +678,36 @@ function ToggleLabel({ label, checked, onChange }: { label: string; checked: boo
                 className="h-4 w-4 rounded border-stone-300 text-orange-600 focus:ring-orange-500"
             />
         </label>
+    );
+}
+
+function VendorInput({
+    label,
+    value,
+    onChange,
+    placeholder,
+    type = "text",
+    required = false,
+}: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder: string;
+    type?: string;
+    required?: boolean;
+}) {
+    return (
+        <div>
+            <label className="block text-sm font-bold text-stone-700 mb-1.5">{label}</label>
+            <input
+                type={type}
+                value={value}
+                min={type === "number" ? 0 : undefined}
+                onChange={(event) => onChange(event.target.value)}
+                placeholder={placeholder}
+                required={required}
+                className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 text-stone-900 transition-colors"
+            />
+        </div>
     );
 }

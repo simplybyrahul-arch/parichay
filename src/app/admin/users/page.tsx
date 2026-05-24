@@ -15,8 +15,16 @@ export default async function UsersPage() {
         .from("creators")
         .select("*");
 
+    const { data: providers } = await supabase
+        .from("provider_profiles")
+        .select("*, equipment_vendor_profiles(*)");
+
     const usersData = users?.map(user => {
         const creatorData = creators?.find(c => c.id === user.id);
+        const providerData = providers?.find(provider => provider.user_id === user.id);
+        const vendorProfile = Array.isArray(providerData?.equipment_vendor_profiles)
+            ? providerData?.equipment_vendor_profiles[0]
+            : providerData?.equipment_vendor_profiles;
         return {
             ...user,
             creator_verified: creatorData?.verified || false,
@@ -28,6 +36,17 @@ export default async function UsersPage() {
             creator_available_for_booking: creatorData?.available_for_booking,
             creator_travel_enabled: creatorData?.travel_enabled,
             creator_service_cities: creatorData?.service_cities,
+            provider_verified: providerData?.verified || false,
+            provider_type: providerData?.provider_type,
+            provider_subtype: providerData?.provider_subtype,
+            provider_business_name: providerData?.business_name,
+            provider_city: providerData?.city,
+            provider_state: providerData?.state,
+            vendor_phone: vendorProfile?.phone,
+            vendor_whatsapp_phone: vendorProfile?.whatsapp_phone,
+            vendor_delivery_available: vendorProfile?.delivery_available,
+            vendor_operator_support_available: vendorProfile?.operator_support_available,
+            vendor_equipment_categories: vendorProfile?.equipment_categories,
         };
     }) || [];
 

@@ -155,6 +155,15 @@ export async function findQuickBookingMatches(input: QuickBookingDraft): Promise
         if (!user) return { success: false, message: "Login is required.", matches: [], estimated_total: draft.estimatedTotal };
 
         const admin = createAdminClient();
+        const { data: profile } = await admin
+            .from("users")
+            .select("account_type")
+            .eq("id", user.id)
+            .single();
+        if (profile?.account_type !== "client") {
+            return { success: false, message: "Only client accounts can use Quick Booking.", matches: [], estimated_total: draft.estimatedTotal };
+        }
+
         const { data: creators, error } = await admin
             .from("creators")
             .select("id, role, primary_service, service_tags, event_tags, equipment_tags, post_production_tags, specialization_tags, style_tags, city, state, location, day_rate, verified, profile_image_url, portfolio_url, tags, service_cities, budget_tiers, travel_radius_km, travel_locations, instant_booking_enabled, response_rate, completion_rate, repeat_clients, available_for_booking, budget_flexibility, rating, completed_shoots, response_time, profile_completeness, users!creators_id_fkey(full_name)")
@@ -267,7 +276,11 @@ export async function selectQuickBookingCreator(input: QuickBookingDraft & { cre
         if (!user) return { success: false, message: "Login is required." };
 
         const admin = createAdminClient();
-        const { data: client } = await admin.from("users").select("full_name").eq("id", user.id).single();
+        const { data: client } = await admin.from("users").select("full_name, account_type").eq("id", user.id).single();
+        if (client?.account_type !== "client") {
+            return { success: false, message: "Only client accounts can select a creator." };
+        }
+
         const { data: creator, error: creatorError } = await admin
             .from("creators")
             .select("id, verified, available_for_booking")

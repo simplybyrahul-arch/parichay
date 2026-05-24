@@ -4,6 +4,8 @@ import { headers } from "next/headers";
 type AuditAction = 
     | "VERIFY_CREATOR_REVOKE"
     | "VERIFY_CREATOR_GRANT"
+    | "VERIFY_EQUIPMENT_VENDOR_REVOKE"
+    | "VERIFY_EQUIPMENT_VENDOR_GRANT"
     | "UPDATE_PLATFORM_SETTINGS"
     | "RESOLVE_DISPUTE";
 

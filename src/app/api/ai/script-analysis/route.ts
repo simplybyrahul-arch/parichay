@@ -10,6 +10,9 @@ import {
 
 export const runtime = "nodejs";
 
+const SCRIPT_ANALYSIS_LIMIT = 10;
+const SCRIPT_ANALYSIS_WINDOW_HOURS = 1;
+
 function createAdminClient() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -190,6 +193,25 @@ async function runScriptAnalysis(scriptText: string): Promise<ScriptAnalysisResu
     return createFallbackScriptAnalysis(scriptText);
 }
 
+async function isRateLimited(userId: string) {
+    const admin = createAdminClient();
+    if (!admin) return false;
+
+    const since = new Date(Date.now() - SCRIPT_ANALYSIS_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
+    const { count, error } = await admin
+        .from("script_analyses")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .gte("created_at", since);
+
+    if (error) {
+        console.error("Script analysis rate limit check error:", error);
+        return false;
+    }
+
+    return Number(count || 0) >= SCRIPT_ANALYSIS_LIMIT;
+}
+
 export async function POST(request: Request) {
     try {
         const body = await request.json();
@@ -207,6 +229,13 @@ export async function POST(request: Request) {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
             return NextResponse.json({ error: "Login is required to analyze a script." }, { status: 401 });
+        }
+
+        if (await isRateLimited(user.id)) {
+            return NextResponse.json(
+                { error: `Script analysis limit reached. Please try again later.` },
+                { status: 429 }
+            );
         }
 
         const analysis = await runScriptAnalysis(scriptText);

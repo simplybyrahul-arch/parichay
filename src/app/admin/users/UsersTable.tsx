@@ -1,6 +1,6 @@
 "use client";
 
-import { verifyCreator } from "@/app/actions/admin";
+import { verifyCreator, verifyEquipmentVendor } from "@/app/actions/admin";
 import { CheckCircle, XCircle } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -20,6 +20,17 @@ type UserData = {
     creator_available_for_booking?: boolean | null;
     creator_travel_enabled?: boolean | null;
     creator_service_cities?: string[] | null;
+    provider_verified?: boolean;
+    provider_type?: string | null;
+    provider_subtype?: string | null;
+    provider_business_name?: string | null;
+    provider_city?: string | null;
+    provider_state?: string | null;
+    vendor_phone?: string | null;
+    vendor_whatsapp_phone?: string | null;
+    vendor_delivery_available?: boolean | null;
+    vendor_operator_support_available?: boolean | null;
+    vendor_equipment_categories?: string[] | null;
 };
 
 export const UsersTable = ({ users }: { users: UserData[] }) => {
@@ -38,6 +49,22 @@ export const UsersTable = ({ users }: { users: UserData[] }) => {
             toast.success(`Creator ${!currentStatus ? 'verified' : 'unverified'} successfully`);
         } catch (error: unknown) {
             toast.error(error instanceof Error ? error.message : "Failed to update status");
+        } finally {
+            setLoadingId(null);
+        }
+    };
+
+    const handleVendorVerifyToggle = async (userId: string, currentStatus: boolean) => {
+        setLoadingId(userId);
+        try {
+            await verifyEquipmentVendor(userId, !currentStatus);
+            setTableUsers((currentUsers) => currentUsers.map((user) => (
+                user.id === userId ? { ...user, provider_verified: !currentStatus } : user
+            )));
+            router.refresh();
+            toast.success(`Equipment vendor ${!currentStatus ? 'verified' : 'unverified'} successfully`);
+        } catch (error: unknown) {
+            toast.error(error instanceof Error ? error.message : "Failed to update vendor status");
         } finally {
             setLoadingId(null);
         }
@@ -82,6 +109,27 @@ export const UsersTable = ({ users }: { users: UserData[] }) => {
                                                 <div className="text-xs text-stone-500">Cities: {user.creator_service_cities.join(", ")}</div>
                                             ) : null}
                                         </div>
+                                    ) : user.account_type === 'equipment_vendor' ? (
+                                        <div className="space-y-1">
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
+                                                Equipment Vendor
+                                            </span>
+                                            <div className="text-xs text-stone-500">
+                                                {user.provider_business_name || user.full_name || "Business not set"}
+                                            </div>
+                                            <div className="text-xs text-stone-500">
+                                                {[user.provider_city, user.provider_state].filter(Boolean).join(", ") || "City not set"}
+                                            </div>
+                                            <div className="text-xs text-stone-500">
+                                                Phone: {user.vendor_phone || user.vendor_whatsapp_phone || "Not set"}
+                                            </div>
+                                            <div className="text-xs text-stone-500">
+                                                {user.vendor_delivery_available ? "Delivery available" : "Pickup/local only"} Â· {user.vendor_operator_support_available ? "Operator support" : "No operator support"}
+                                            </div>
+                                            {user.vendor_equipment_categories?.length ? (
+                                                <div className="text-xs text-stone-500">Categories: {user.vendor_equipment_categories.join(", ")}</div>
+                                            ) : null}
+                                        </div>
                                     ) : (
                                         <span className="text-stone-400">-</span>
                                     )}
@@ -90,6 +138,7 @@ export const UsersTable = ({ users }: { users: UserData[] }) => {
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                                         user.account_type === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' :
                                         user.account_type === 'creator' ? 'bg-stone-100 text-stone-700 border-stone-200' :
+                                        user.account_type === 'equipment_vendor' ? 'bg-violet-50 text-violet-700 border-violet-200' :
                                         'bg-orange-50 text-orange-700 border-orange-200'
                                     }`}>
                                         {user.account_type}
@@ -98,6 +147,18 @@ export const UsersTable = ({ users }: { users: UserData[] }) => {
                                 <td className="px-6 py-4">
                                     {user.account_type === 'creator' ? (
                                         user.creator_verified ? (
+                                            <div className="flex items-center gap-1.5 text-green-600">
+                                                <CheckCircle className="w-4 h-4" />
+                                                <span className="font-medium">Verified</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-1.5 text-stone-400">
+                                                <XCircle className="w-4 h-4" />
+                                                <span>Unverified</span>
+                                            </div>
+                                        )
+                                    ) : user.account_type === 'equipment_vendor' ? (
+                                        user.provider_verified ? (
                                             <div className="flex items-center gap-1.5 text-green-600">
                                                 <CheckCircle className="w-4 h-4" />
                                                 <span className="font-medium">Verified</span>
@@ -120,6 +181,15 @@ export const UsersTable = ({ users }: { users: UserData[] }) => {
                                             className="text-sm font-medium text-orange-600 hover:text-orange-700 disabled:opacity-50 transition-colors"
                                         >
                                             {loadingId === user.id ? "Processing..." : (user.creator_verified ? "Revoke" : "Verify")}
+                                        </button>
+                                    )}
+                                    {user.account_type === 'equipment_vendor' && (
+                                        <button
+                                            onClick={() => handleVendorVerifyToggle(user.id, Boolean(user.provider_verified))}
+                                            disabled={loadingId === user.id}
+                                            className="text-sm font-medium text-violet-600 hover:text-violet-700 disabled:opacity-50 transition-colors"
+                                        >
+                                            {loadingId === user.id ? "Processing..." : (user.provider_verified ? "Revoke" : "Verify")}
                                         </button>
                                     )}
                                 </td>

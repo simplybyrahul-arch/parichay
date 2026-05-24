@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-    Zap, Settings, ArrowRight, ArrowLeft, CheckCircle, Plus, Minus, Trash2,
+    Zap, Settings, ArrowRight, ArrowLeft, CheckCircle, Plus, Minus,
     CalendarDays, Package, FileText, Brain, Upload, Search, Info, MapPin, Star
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
@@ -27,10 +27,8 @@ import {
     getSelectedCount,
 } from "@/config/bookingOptions";
 import {
-    ALL_EQUIPMENT_ITEMS,
     EQUIPMENT_CATEGORIES,
     EQUIPMENT_PACKAGES,
-    estimateEquipmentTotal,
     getEquipmentItemById,
     getRecommendedEquipment,
 } from "@/lib/bookings/equipmentCatalog";
@@ -89,12 +87,6 @@ export default function BookingFlow() {
         scope: true,
     });
 
-    const availableRoles = BOOKING_CREW_CATEGORIES.flatMap((category) => category.options).map((role) => ({
-        id: role.id,
-        name: role.label,
-        rate: 0,
-    }));
-
     const handleAddRole = (role: { id: string, name: string, rate: number }) => {
         setCrew(prev => {
             const ext = prev.find(r => r.id === role.id);
@@ -111,18 +103,7 @@ export default function BookingFlow() {
         });
     };
 
-    const totalCost = crew.reduce((acc, curr) => acc + (curr.rate * curr.count), 0) * days;
-    const platformFee = totalCost * 0.10;
-    const grandTotal = totalCost + platformFee;
-
-
     // ====== EQUIPMENT MODE STATE ======
-    const availableEquipment = ALL_EQUIPMENT_ITEMS.map((item) => ({
-        id: item.id,
-        name: item.name,
-        rate: item.pricePerDay,
-    }));
-
     const [equipment, setEquipment] = useState<Array<{ id: string, name: string, rate: number, count: number }>>([]);
     const [equipDays, setEquipDays] = useState(1);
     const [equipmentStartDate, setEquipmentStartDate] = useState("");
@@ -156,9 +137,6 @@ export default function BookingFlow() {
         });
     };
 
-    const equipmentTotal = estimateEquipmentTotal(equipment, equipDays);
-    const equipPlatformFee = equipmentTotal * 0.10;
-    const equipGrandTotal = equipmentTotal + equipPlatformFee;
     const filteredEquipmentCategories = useMemo(() => {
         const query = equipmentSearch.trim().toLowerCase();
         return EQUIPMENT_CATEGORIES
@@ -216,6 +194,7 @@ export default function BookingFlow() {
     const  [bookingLocation, setBookingLocation] = useState("");
     const [shootTime, setShootTime] = useState("10:00");
     const [durationHours, setDurationHours] = useState(4);
+    const [customDurationDays, setCustomDurationDays] = useState("");
     const [locationCity, setLocationCity] = useState("");
     const [locationState, setLocationState] = useState("");
     const [locationLatitude] = useState<number | null>(null);
@@ -297,6 +276,23 @@ export default function BookingFlow() {
         }
         toast.success("Suggested setup added.");
     };
+    const durationPresetValue = [2, 4, 8].includes(durationHours) ? String(durationHours) : "other";
+    const handleDurationPresetChange = (value: string) => {
+        if (value === "other") {
+            const days = customDurationDays || "2";
+            setCustomDurationDays(days);
+            setDurationHours(Number(days) * 8);
+            return;
+        }
+        setCustomDurationDays("");
+        setDurationHours(Number(value));
+    };
+    const handleCustomDurationDaysChange = (value: string) => {
+        const digitsOnly = value.replace(/\D/g, "");
+        setCustomDurationDays(digitsOnly);
+        const days = Math.max(2, Number(digitsOnly || 0));
+        if (digitsOnly) setDurationHours(days * 8);
+    };
     const eventCategoryDescriptions: Record<string, string> = {
         weddings_personal: "Weddings, engagements, birthdays",
         commercial_brand: "Ads, products, campaigns",
@@ -371,7 +367,12 @@ export default function BookingFlow() {
             if (draft.bookingDate) setBookingDate(draft.bookingDate);
             if (draft.bookingLocation) setBookingLocation(draft.bookingLocation);
             if (draft.shootTime) setShootTime(draft.shootTime);
-            if (typeof draft.durationHours === "number") setDurationHours(draft.durationHours);
+            if (typeof draft.durationHours === "number") {
+                setDurationHours(draft.durationHours);
+                if (draft.durationHours > 8) {
+                    setCustomDurationDays(String(Math.ceil(draft.durationHours / 8)));
+                }
+            }
             if (draft.locationCity) setLocationCity(draft.locationCity);
             if (draft.locationState) setLocationState(draft.locationState);
             if (draft.budgetTier) setBudgetTier(draft.budgetTier);
@@ -673,11 +674,12 @@ export default function BookingFlow() {
                 title: "Equipment Rental Request",
                 description,
                 requirementSummary: description,
-                budget: 25000,
+                budget: 0,
                 estimatedDays: equipDays,
                 eventDate: equipmentStartDate,
                 bookingLocation: equipmentLocation,
                 equipmentRequirements: equipmentRequestCounts,
+                equipmentOperatorRequired: equipmentOperatorNeeded,
                 initialStatus: "checking_availability",
                 notificationType: "equipment_rental_request",
                 notificationTitle: "New equipment rental request",
@@ -867,7 +869,7 @@ export default function BookingFlow() {
                                         <FileText className="w-6 h-6" />
                                     </div>
                                     <h3 className="text-xl font-black text-stone-900 mb-2 font-display">AI Planner</h3>
-                                    <p className="text-stone-600 font-medium mb-6 flex-grow text-sm">Upload or paste your script — AI recommends crew, gear, and production requirements.</p>
+                                    <p className="text-stone-600 font-medium mb-6 flex-grow text-sm">Upload or paste your script â€” AI recommends crew, gear, and production requirements.</p>
                                     <div className="flex items-center text-emerald-600 font-bold gap-2 text-sm group-hover:gap-3 transition-all">
                                         Start <ArrowRight className="w-4 h-4" />
                                     </div>
@@ -877,7 +879,7 @@ export default function BookingFlow() {
                     )}
 
 
-                    {/* ====== QUICK BOOKING FLOW (4 steps: Event → Crew Count → Date → Budget) ====== */}
+                    {/* ====== QUICK BOOKING FLOW (4 steps: Event â†’ Crew Count â†’ Date â†’ Budget) ====== */}
                     {mode === "quick" && (
                         <motion.div
                             key="quick"
@@ -1226,16 +1228,35 @@ export default function BookingFlow() {
                                             <label htmlFor="quick-duration" className="block text-sm font-bold text-stone-700 mb-2">Estimated Duration</label>
                                             <select
                                                 id="quick-duration"
-                                                value={durationHours}
-                                                onChange={(e) => setDurationHours(Number(e.target.value))}
+                                                value={durationPresetValue}
+                                                onChange={(e) => handleDurationPresetChange(e.target.value)}
                                                 className="w-full p-4 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                                             >
                                                 <option value={2}>2 hours</option>
                                                 <option value={4}>4 hours</option>
                                                 <option value={8}>Full day</option>
-                                                <option value={16}>2 days</option>
-                                                <option value={24}>3 days</option>
+                                                <option value="other">Other / multi-day</option>
                                             </select>
+                                            {durationPresetValue === "other" && (
+                                                <div className="mt-3">
+                                                    <label htmlFor="quick-duration-days" className="block text-xs font-bold text-stone-600 mb-1">
+                                                        Number of shoot days
+                                                    </label>
+                                                    <input
+                                                        id="quick-duration-days"
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        pattern="[0-9]*"
+                                                        value={customDurationDays}
+                                                        onChange={(event) => handleCustomDurationDaysChange(event.target.value)}
+                                                        placeholder="Enter days, e.g. 4"
+                                                        className="w-full p-4 rounded-xl border border-stone-200 bg-stone-50 text-stone-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                                    />
+                                                    <p className="mt-1 text-xs font-semibold text-stone-500">
+                                                        Type numbers only. Use this for weddings or shoots longer than 1 day.
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="grid md:grid-cols-2 gap-4">
@@ -1509,7 +1530,7 @@ export default function BookingFlow() {
                                                 return (
                                                     <section key={category.id} className="rounded-2xl border border-stone-200 bg-stone-50 overflow-hidden">
                                                         <button type="button" onClick={() => toggleAccordion(setOpenCrewCategories, category.id, 2)} className="flex w-full items-center justify-between px-5 py-4 text-left">
-                                                            <span className="font-black text-stone-900">{category.label}{selected ? ` · ${selected} selected` : ""}</span>
+                                                            <span className="font-black text-stone-900">{category.label}{selected ? ` Â· ${selected} selected` : ""}</span>
                                                             <span className="text-sm font-bold text-stone-500">{openCrewCategories[category.id] ? "Hide" : "Show"}</span>
                                                         </button>
                                                         {openCrewCategories[category.id] && (
@@ -1602,128 +1623,6 @@ export default function BookingFlow() {
                             </div>
                         </motion.div>
                     )}
-
-                    {/* ====== LEGACY BUILDER MODE FLOW ====== */}
-                    {false && mode === "builder" && (
-                        <motion.div
-                            key="builder"
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -20 }}
-                            className="w-full grid lg:grid-cols-3 gap-8"
-                        >
-                            {/* Left Column: Role Selection */}
-                            <div className="lg:col-span-2 space-y-6">
-                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
-                                    <div className="mb-8">
-                                        <h2 className="text-3xl font-black text-stone-900 mb-2 font-display">Build Your Crew</h2>
-                                        <p className="text-stone-500">Select the roles you need for your production.</p>
-                                    </div>
-                                    <div className="grid sm:grid-cols-2 gap-4">
-                                        {availableRoles.map(role => (
-                                            <div key={role.id} className="p-4 border border-stone-200 rounded-2xl flex items-center justify-between hover:border-orange-200 hover:bg-orange-50/50 transition-colors group">
-                                                <div>
-                                                    <h4 className="font-bold text-stone-900 group-hover:text-orange-600 transition-colors">{role.name}</h4>
-                                                    <p className="text-sm font-medium text-stone-500">₹{role.rate.toLocaleString('en-IN')}/day</p>
-                                                </div>
-                                                <button
-                                                    aria-label={`Add ${role.name}`}
-                                                    title={`Add ${role.name}`}
-                                                    onClick={() => handleAddRole(role)}
-                                                    className="w-10 h-10 rounded-xl bg-stone-100 text-stone-600 flex items-center justify-center hover:bg-orange-600 hover:text-white transition-all active:scale-95"
-                                                >
-                                                    <Plus className="w-5 h-5" />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Timeline Setting */}
-                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
-                                    <div className="flex items-center gap-4 mb-6">
-                                        <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center">
-                                            <CalendarDays className="w-6 h-6" />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-bold text-stone-900 font-display">Production Timeline</h3>
-                                            <p className="text-sm text-stone-500">How many days will the crew be needed?</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <button aria-label="Decrease production days" title="Decrease production days" onClick={() => setDays(Math.max(1, days - 1))} className="w-12 h-12 rounded-xl border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-50 active:scale-95">
-                                            <Minus className="w-5 h-5" />
-                                        </button>
-                                        <div className="flex-1 text-center py-3 bg-stone-50 rounded-xl border border-stone-200 font-bold text-stone-900 text-xl">
-                                            {days} {days === 1 ? 'Day' : 'Days'}
-                                        </div>
-                                        <button aria-label="Increase production days" title="Increase production days" onClick={() => setDays(days + 1)} className="w-12 h-12 rounded-xl border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-50 active:scale-95">
-                                            <Plus className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Right Column: Crew Cart */}
-                            <div className="lg:col-span-1">
-                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100 sticky top-24">
-                                    <h3 className="text-xl font-black text-stone-900 mb-6 font-display">Crew Cart</h3>
-
-                                    {crew.length === 0 ? (
-                                        <div className="text-center py-10 bg-stone-50 rounded-2xl border border-dashed border-stone-200">
-                                            <p className="text-stone-500 font-medium">Your crew list is empty.</p>
-                                            <p className="text-xs text-stone-400 mt-1">Add roles from the left to see estimates.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-4 mb-8">
-                                            {crew.map(member => (
-                                                <div key={member.id} className="flex items-center justify-between pb-4 border-b border-stone-100 last:border-0 last:pb-0">
-                                                    <div>
-                                                        <div className="font-bold text-stone-900 text-sm">{member.name}</div>
-                                                        <div className="text-xs text-stone-500">₹{member.rate.toLocaleString('en-IN')}/day</div>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex items-center gap-2 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200">
-                                                            <button aria-label={`Decrease ${member.name}`} title={`Decrease ${member.name}`} onClick={() => handleRemoveRole(member.id)} className="text-stone-400 hover:text-stone-900 p-1"><Minus className="w-3 h-3" /></button>
-                                                            <span className="text-xs font-bold text-stone-900 w-3 text-center">{member.count}</span>
-                                                            <button aria-label={`Increase ${member.name}`} title={`Increase ${member.name}`} onClick={() => handleAddRole(member)} className="text-stone-400 hover:text-stone-900 p-1"><Plus className="w-3 h-3" /></button>
-                                                        </div>
-                                                        <button aria-label={`Remove ${member.name}`} title={`Remove ${member.name}`} onClick={() => handleRemoveRole(member.id, true)} className="text-rose-400 hover:text-rose-600 p-2 rounded-lg hover:bg-rose-50 transition-colors">
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    <div className="bg-stone-50 p-6 rounded-2xl mb-6">
-                                        <div className="flex justify-between text-sm mb-3">
-                                            <span className="text-stone-500 font-medium">Crew Subtotal ({days} days)</span>
-                                            <span className="font-bold text-stone-900">₹{totalCost.toLocaleString('en-IN')}</span>
-                                        </div>
-                                        <div className="flex justify-between text-sm mb-4 pb-4 border-b border-stone-200">
-                                            <span className="text-stone-500 font-medium">Platform Fee (10%)</span>
-                                            <span className="font-bold text-stone-900">₹{platformFee.toLocaleString('en-IN')}</span>
-                                        </div>
-                                        <div className="flex justify-between items-end">
-                                            <span className="text-stone-900 font-black font-display">Est. Total</span>
-                                            <span className="text-2xl font-black text-rose-600 font-display">₹{grandTotal.toLocaleString('en-IN')}</span>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        disabled={crew.length === 0 || isSubmitting}
-                                        onClick={handleBuilderBooking}
-                                        className="w-full py-4 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-95 group"
-                                    >
-                                        {isSubmitting ? "Processing..." : <>Request Crew <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></>}
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-
 
                     {/* ====== EQUIPMENT RENTAL REQUEST FLOW ====== */}
                     {mode === "equipment" && (
@@ -1880,207 +1779,6 @@ export default function BookingFlow() {
                         </motion.div>
                     )}
 
-                    {/* ====== LEGACY EQUIPMENT BOOKING FLOW ====== */}
-                    {false && mode === "equipment" && (
-                        <motion.div
-                            key="equipment"
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: -20 }}
-                            className="w-full grid lg:grid-cols-3 gap-8"
-                        >
-                            {/* Left Column: Equipment Catalog */}
-                            <div className="lg:col-span-2 space-y-6">
-                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
-                                    <div className="mb-8">
-                                        <h2 className="text-3xl font-black text-stone-900 mb-2 font-display">Book Equipment</h2>
-                                        <p className="text-stone-500">Choose rental-grade camera, lighting, audio, broadcast, and post-production equipment.</p>
-                                    </div>
-                                    <div className="space-y-6">
-                                        <div>
-                                            <h3 className="font-black text-stone-900 mb-3">Production Packages</h3>
-                                            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                                                {EQUIPMENT_PACKAGES.map((kit) => (
-                                                    <button key={kit.id} type="button" onClick={() => selectEquipmentPackage(kit.id)} className="rounded-2xl border border-stone-200 bg-stone-50 p-4 text-left transition-all hover:border-orange-300 hover:bg-orange-50">
-                                                        <div className="font-black text-stone-900">{kit.name}</div>
-                                                        <p className="mt-1 text-xs font-medium text-stone-500">{kit.description}</p>
-                                                        <p className="mt-3 text-sm font-black text-orange-600">Rs {kit.estimatedPrice.toLocaleString("en-IN")} est.</p>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        {recommendedEquipment.length > 0 && (
-                                            <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-5">
-                                                <h3 className="font-black text-stone-900 mb-3">Recommended for {selectedEventLabel}</h3>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {recommendedEquipment.map((item) => (
-                                                        <button key={item.id} type="button" onClick={() => handleAddEquipment({ id: item.id, name: item.name, rate: item.pricePerDay })} className="rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-bold text-orange-700 hover:border-orange-500">
-                                                            + {item.name}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                        <div className="grid md:grid-cols-[1fr_auto] gap-3">
-                                            <div className="relative">
-                                                <Search className="w-5 h-5 text-stone-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                                                <input type="search" value={equipmentSearch} onChange={(event) => setEquipmentSearch(event.target.value)} placeholder="Search camera, lens, light, audio, drone..." className="w-full pl-12 pr-4 py-4 rounded-2xl border border-stone-200 bg-stone-50 text-stone-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500" />
-                                            </div>
-                                            <select value={activeEquipmentCategory} onChange={(event) => setActiveEquipmentCategory(event.target.value)} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm font-bold text-stone-700 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500">
-                                                <option value="all">All categories</option>
-                                                {EQUIPMENT_CATEGORIES.map((category) => (
-                                                    <option key={category.id} value={category.id}>{category.name}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="space-y-4">
-                                            {filteredEquipmentCategories.map((category) => {
-                                                const CategoryIcon = category.icon;
-                                                const isOpen = openEquipmentCategories[category.id] ?? true;
-                                                return (
-                                                    <section key={category.id} className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
-                                                        <button type="button" onClick={() => setOpenEquipmentCategories((current) => ({ ...current, [category.id]: !isOpen }))} className="flex w-full items-center justify-between gap-3 bg-stone-50 px-5 py-4 text-left">
-                                                            <span className="flex items-center gap-2 font-black text-stone-900"><CategoryIcon className="w-5 h-5 text-orange-600" />{category.name}</span>
-                                                            <span className="text-sm font-bold text-stone-500">{isOpen ? "Hide" : "Show"}</span>
-                                                        </button>
-                                                        {isOpen && (
-                                                            <div className="grid sm:grid-cols-2 gap-3 p-4">
-                                                                {category.items.map((item) => {
-                                                                    const selectedCount = equipment.find((entry) => entry.id === item.id)?.count || 0;
-                                                                    return (
-                                                                        <div key={item.id} className={`rounded-2xl border p-4 transition-all ${selectedCount ? "border-orange-500 bg-orange-50 shadow-lg shadow-orange-100" : "border-stone-200 bg-white hover:border-orange-200"}`}>
-                                                                            <div className="flex items-start justify-between gap-3">
-                                                                                <div>
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <h4 className="font-black text-stone-900">{item.name}</h4>
-                                                                                        {selectedCount > 0 && <span className="rounded-full bg-orange-600 px-2 py-0.5 text-xs font-black text-white">{selectedCount}</span>}
-                                                                                    </div>
-                                                                                    <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-stone-400">{item.subcategory} - {item.availability}</p>
-                                                                                    <p className="mt-2 text-sm text-stone-600">{item.description}</p>
-                                                                                    <p className="mt-3 text-sm font-black text-orange-600">Rs {item.pricePerDay.toLocaleString("en-IN")}/day</p>
-                                                                                </div>
-                                                                            </div>
-                                                                            <div className="mt-4 flex items-center justify-between rounded-xl border border-stone-200 bg-stone-50 px-2 py-1">
-                                                                                <button aria-label={`Decrease ${item.name}`} title={`Decrease ${item.name}`} onClick={() => handleRemoveEquipment(item.id)} className="p-2 text-stone-500 hover:text-stone-900 disabled:opacity-40" disabled={!selectedCount}><Minus className="w-4 h-4" /></button>
-                                                                                <span className="text-lg font-black text-stone-900">{selectedCount}</span>
-                                                                                <button aria-label={`Increase ${item.name}`} title={`Increase ${item.name}`} onClick={() => handleAddEquipment({ id: item.id, name: item.name, rate: item.pricePerDay })} className="p-2 text-orange-600 hover:text-orange-700"><Plus className="w-4 h-4" /></button>
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        )}
-                                                    </section>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                    <div className="hidden">
-                                        {availableEquipment.map(item => (
-                                            <div key={item.id} className="p-4 border border-stone-200 rounded-2xl flex items-center justify-between hover:border-violet-200 hover:bg-violet-50/50 transition-colors group">
-                                                <div>
-                                                    <h4 className="font-bold text-stone-900 group-hover:text-violet-600 transition-colors">{item.name}</h4>
-                                                    <p className="text-sm font-medium text-stone-500">₹{item.rate.toLocaleString('en-IN')}/day</p>
-                                                </div>
-                                                <button
-                                                    aria-label={`Add ${item.name}`}
-                                                    title={`Add ${item.name}`}
-                                                    onClick={() => handleAddEquipment(item)}
-                                                    className="w-10 h-10 rounded-xl bg-stone-100 text-stone-600 flex items-center justify-center hover:bg-violet-600 hover:text-white transition-all active:scale-95"
-                                                >
-                                                    <Plus className="w-5 h-5" />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Duration Setting */}
-                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
-                                    <div className="flex items-center gap-4 mb-6">
-                                        <div className="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center">
-                                            <CalendarDays className="w-6 h-6" />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-bold text-stone-900 font-display">Rental Duration</h3>
-                                            <p className="text-sm text-stone-500">How many days do you need the equipment?</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <button aria-label="Decrease equipment rental days" title="Decrease equipment rental days" onClick={() => setEquipDays(Math.max(1, equipDays - 1))} className="w-12 h-12 rounded-xl border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-50 active:scale-95">
-                                            <Minus className="w-5 h-5" />
-                                        </button>
-                                        <div className="flex-1 text-center py-3 bg-stone-50 rounded-xl border border-stone-200 font-bold text-stone-900 text-xl">
-                                            {equipDays} {equipDays === 1 ? 'Day' : 'Days'}
-                                        </div>
-                                        <button aria-label="Increase equipment rental days" title="Increase equipment rental days" onClick={() => setEquipDays(equipDays + 1)} className="w-12 h-12 rounded-xl border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-50 active:scale-95">
-                                            <Plus className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Right Column: Equipment Cart */}
-                            <div className="lg:col-span-1">
-                                <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100 sticky top-24">
-                                    <h3 className="text-xl font-black text-stone-900 mb-6 font-display">Equipment Cart</h3>
-
-                                    {equipment.length === 0 ? (
-                                        <div className="text-center py-10 bg-stone-50 rounded-2xl border border-dashed border-stone-200">
-                                            <p className="text-stone-500 font-medium">Your cart is empty.</p>
-                                            <p className="text-xs text-stone-400 mt-1">Add items from the catalog to see estimates.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-4 mb-8">
-                                            {equipment.map(item => (
-                                                <div key={item.id} className="flex items-center justify-between pb-4 border-b border-stone-100 last:border-0 last:pb-0">
-                                                    <div>
-                                                        <div className="font-bold text-stone-900 text-sm">{item.name}</div>
-                                                        <div className="text-xs text-stone-500">₹{item.rate.toLocaleString('en-IN')}/day</div>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex items-center gap-2 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200">
-                                                            <button aria-label={`Decrease ${item.name}`} title={`Decrease ${item.name}`} onClick={() => handleRemoveEquipment(item.id)} className="text-stone-400 hover:text-stone-900 p-1"><Minus className="w-3 h-3" /></button>
-                                                            <span className="text-xs font-bold text-stone-900 w-3 text-center">{item.count}</span>
-                                                            <button aria-label={`Increase ${item.name}`} title={`Increase ${item.name}`} onClick={() => handleAddEquipment(item)} className="text-stone-400 hover:text-stone-900 p-1"><Plus className="w-3 h-3" /></button>
-                                                        </div>
-                                                        <button aria-label={`Remove ${item.name}`} title={`Remove ${item.name}`} onClick={() => handleRemoveEquipment(item.id, true)} className="text-rose-400 hover:text-rose-600 p-2 rounded-lg hover:bg-rose-50 transition-colors">
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    <div className="bg-stone-50 p-6 rounded-2xl mb-6">
-                                        <div className="flex justify-between text-sm mb-3">
-                                            <span className="text-stone-500 font-medium">Subtotal ({equipDays} days)</span>
-                                            <span className="font-bold text-stone-900">₹{equipmentTotal.toLocaleString('en-IN')}</span>
-                                        </div>
-                                        <div className="flex justify-between text-sm mb-4 pb-4 border-b border-stone-200">
-                                            <span className="text-stone-500 font-medium">Platform Fee (10%)</span>
-                                            <span className="font-bold text-stone-900">₹{equipPlatformFee.toLocaleString('en-IN')}</span>
-                                        </div>
-                                        <div className="flex justify-between items-end">
-                                            <span className="text-stone-900 font-black font-display">Est. Total</span>
-                                            <span className="text-2xl font-black text-violet-600 font-display">₹{equipGrandTotal.toLocaleString('en-IN')}</span>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        disabled={equipment.length === 0 || isSubmitting}
-                                        onClick={handleEquipmentBooking}
-                                        className="w-full py-4 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-95 group"
-                                    >
-                                        {isSubmitting ? "Processing..." : <>Request Equipment <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></>}
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-
-
                     {/* ====== SCRIPT ANALYSIS FLOW ====== */}
                     {mode === "script" && (
                         <motion.div
@@ -2114,7 +1812,7 @@ export default function BookingFlow() {
                                             />
                                         </div>
                                         <div className="flex items-center gap-4 flex-wrap">
-                                            <span className="text-stone-400 text-sm font-medium">— or —</span>
+                                            <span className="text-stone-400 text-sm font-medium">â€” or â€”</span>
                                             <button
                                                 aria-label="Upload script text file"
                                                 title="Upload script text file"
@@ -2175,7 +1873,7 @@ export default function BookingFlow() {
                                         <div className="hidden">
                                         <div className="grid md:grid-cols-2 gap-5">
                                             <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100">
-                                                <h4 className="font-bold text-orange-900 mb-3">👥 Recommended Crew</h4>
+                                                <h4 className="font-bold text-orange-900 mb-3">ðŸ‘¥ Recommended Crew</h4>
                                                 <ul className="space-y-1.5">
                                                     {analysisResult.recommended_crew.map((crewItem, i) => (
                                                         <li key={i} className="text-sm text-orange-800 flex items-center gap-2">
@@ -2186,7 +1884,7 @@ export default function BookingFlow() {
                                                 </ul>
                                             </div>
                                             <div className="bg-violet-50 p-5 rounded-2xl border border-violet-100">
-                                                <h4 className="font-bold text-violet-900 mb-3">🎥 Suggested Equipment</h4>
+                                                <h4 className="font-bold text-violet-900 mb-3">ðŸŽ¥ Suggested Equipment</h4>
                                                 <ul className="space-y-1.5">
                                                     {analysisResult.suggested_equipment.map((item, i) => (
                                                         <li key={i} className="text-sm text-violet-800 flex items-center gap-2">
@@ -2197,11 +1895,11 @@ export default function BookingFlow() {
                                                 </ul>
                                             </div>
                                             <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
-                                                <h4 className="font-bold text-blue-900 mb-3">📅 Estimated Duration</h4>
+                                                <h4 className="font-bold text-blue-900 mb-3">ðŸ“… Estimated Duration</h4>
                                                 <p className="text-sm text-blue-800 font-medium">{analysisResult.estimated_duration}</p>
                                             </div>
                                             <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100">
-                                                <h4 className="font-bold text-emerald-900 mb-3">⚙️ Key Requirements</h4>
+                                                <h4 className="font-bold text-emerald-900 mb-3">âš™ï¸ Key Requirements</h4>
                                                 <ul className="space-y-1.5">
                                                     {analysisResult.production_checklist.map((req, i) => (
                                                         <li key={i} className="text-sm text-emerald-800 flex items-center gap-2">
@@ -2325,7 +2023,7 @@ function RequirementChipGroups({
                     return (
                         <div key={category.id}>
                             <div className="mb-2 text-sm font-black text-stone-700">
-                                {category.label}{selectedCount ? ` · ${selectedCount} selected` : ""}
+                                {category.label}{selectedCount ? ` Â· ${selectedCount} selected` : ""}
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {category.options.map((option) => {
