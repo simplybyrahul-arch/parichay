@@ -189,6 +189,18 @@ export default function BookingFlow() {
         toast.success(`${selectedPackage.name} added. You can customize quantities.`);
     };
 
+    useEffect(() => {
+        if (!equipmentStartDate || !equipmentEndDate) return;
+
+        const start = new Date(`${equipmentStartDate}T00:00:00`);
+        const end = new Date(`${equipmentEndDate}T00:00:00`);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return;
+
+        const millisecondsPerDay = 24 * 60 * 60 * 1000;
+        const rentalDays = Math.max(1, Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1);
+        setEquipDays(rentalDays);
+    }, [equipmentStartDate, equipmentEndDate]);
+
 
     // ====== QUICK BOOKING STATE (4 reordered steps) ======
     // Step 1: Event Type
@@ -1798,11 +1810,24 @@ export default function BookingFlow() {
 
                                 <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
                                     <h3 className="text-xl font-bold text-stone-900 font-display mb-5">Rental dates</h3>
+                                    <p className="mb-5 text-sm text-stone-500">Choose the pickup/delivery date and return date. Rental days are calculated automatically, but you can adjust them for flexible requests.</p>
                                     <div className="grid md:grid-cols-3 gap-4">
-                                        <input type="date" value={equipmentStartDate} onChange={(event) => setEquipmentStartDate(event.target.value)} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-violet-500" />
-                                        <input type="date" value={equipmentEndDate} onChange={(event) => setEquipmentEndDate(event.target.value)} className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-violet-500" />
-                                        <input type="number" min={1} value={equipDays} onChange={(event) => setEquipDays(Math.max(1, Number(event.target.value || 1)))} placeholder="Rental days" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-violet-500" />
+                                        <label className="block">
+                                            <span className="mb-2 block text-sm font-black text-stone-700">Rental start date</span>
+                                            <input type="date" value={equipmentStartDate} onChange={(event) => setEquipmentStartDate(event.target.value)} className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-violet-500" />
+                                        </label>
+                                        <label className="block">
+                                            <span className="mb-2 block text-sm font-black text-stone-700">Return / end date</span>
+                                            <input type="date" min={equipmentStartDate || undefined} value={equipmentEndDate} onChange={(event) => setEquipmentEndDate(event.target.value)} className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-violet-500" />
+                                        </label>
+                                        <label className="block">
+                                            <span className="mb-2 block text-sm font-black text-stone-700">Rental days</span>
+                                            <input type="number" min={1} value={equipDays} onChange={(event) => setEquipDays(Math.max(1, Number(event.target.value || 1)))} placeholder="Rental days" className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 font-semibold text-stone-900 outline-none focus:border-violet-500" />
+                                        </label>
                                     </div>
+                                    {equipmentStartDate && equipmentEndDate && (
+                                        <p className="mt-3 text-xs font-semibold text-violet-700">Rental period: {equipmentStartDate} to {equipmentEndDate} · {equipDays} day{equipDays === 1 ? "" : "s"}</p>
+                                    )}
                                 </div>
 
                                 <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-stone-200/50 border border-stone-100">
