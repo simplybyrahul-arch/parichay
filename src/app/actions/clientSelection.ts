@@ -3,6 +3,7 @@
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
+import { upsertProjectBookingFinancials } from "@/lib/payments/bookingFinance";
 
 type ActionResult = {
     success: boolean;
@@ -351,6 +352,15 @@ export async function selectCreator(projectId: string, inviteId: string): Promis
         console.error("Select creator project update error:", projectUpdateError);
         return { success: false, message: "Could not select creator." };
     }
+
+    await upsertProjectBookingFinancials(admin, {
+        id: projectId,
+        client_id: project.client_id,
+        selected_creator_id: invite.creator_id,
+        creator_id: invite.creator_id,
+        budget: project.budget,
+        booking_type: project.booking_type,
+    });
 
     const { error: selectedInviteError } = await admin
         .from("project_invites")

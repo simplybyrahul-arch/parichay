@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, Users, FolderKanban, IndianRupee, LogOut, LineChart, ShieldAlert, Settings, UserCog, UserRound, PackageCheck } from "lucide-react";
+import { LayoutDashboard, Users, FolderKanban, IndianRupee, LogOut, LineChart, ShieldAlert, Settings, UserCog, UserRound, PackageCheck, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
@@ -35,6 +35,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         { href: "/admin/projects", label: "Projects", icon: FolderKanban },
         { href: "/admin/parichay", label: "Parichay", icon: UserCog },
         { href: "/admin/payments", label: "Ledger", icon: IndianRupee },
+        { href: "/admin/finance", label: "Finance", icon: WalletCards },
         { href: "/admin/disputes", label: "Disputes", icon: ShieldAlert },
         { href: "/admin/settings", label: "Settings", icon: Settings },
     ];

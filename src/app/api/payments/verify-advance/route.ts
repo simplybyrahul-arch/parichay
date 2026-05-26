@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/server";
+import { markBookingPaymentHeld, upsertProjectBookingFinancials } from "@/lib/payments/bookingFinance";
 
 function getRequiredEnv(name: string) {
     const value = process.env[name];
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
 
         const { data: project, error: projectLookupError } = await admin
             .from("projects")
-            .select("id, title, client_id, selected_creator_id, budget, status, payment_status")
+            .select("id, title, client_id, selected_creator_id, budget, status, payment_status, booking_type")
             .eq("id", projectId)
             .eq("client_id", user.id)
             .single();
@@ -139,6 +140,16 @@ export async function POST(req: Request) {
             console.error("Advance project update error:", projectError);
             return NextResponse.json({ error: "Failed to confirm booking" }, { status: 500 });
         }
+
+        await upsertProjectBookingFinancials(admin, {
+            id: project.id,
+            client_id: project.client_id,
+            selected_creator_id: project.selected_creator_id,
+            creator_id: paymentIntent.creator_id,
+            budget: project.budget,
+            booking_type: project.booking_type,
+        });
+        await markBookingPaymentHeld(admin, project.id, project.booking_type === "equipment" ? "equipment_rental" : "custom_project");
 
         const notifications = [
             {

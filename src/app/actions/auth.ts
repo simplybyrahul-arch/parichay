@@ -14,11 +14,18 @@ import {
     normalizeEmail,
     validatePasswordStrength,
 } from '@/utils/auth-security'
+import { LEGAL_TERMS_VERSION } from '@/lib/legal/legalContent'
 
 type AuthActionResult = {
     success: boolean;
     message: string;
 };
+
+const portfolioBucket = 'creator-portfolio';
+const imagePortfolioTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const videoPortfolioTypes = new Set(['video/mp4', 'video/quicktime', 'video/webm']);
+const maxPortfolioImageSize = 10 * 1024 * 1024;
+const maxPortfolioVideoSize = 100 * 1024 * 1024;
 
 function getEmailRedirectTo() {
     return getAuthCallbackUrl('/login?verified=1');
@@ -55,9 +62,69 @@ function toPositiveNumber(value: FormDataEntryValue | null) {
     return Number.isFinite(numberValue) && numberValue > 0 ? Math.round(numberValue) : 0;
 }
 
+function toStringArray(value: FormDataEntryValue | null) {
+    return String(value || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
 function createSlug(value: string, id: string) {
     const base = value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'creator';
     return `${base}-${id.slice(0, 8)}`;
+}
+
+function getPortfolioMediaType(file: File): 'image' | 'video' | null {
+    if (imagePortfolioTypes.has(file.type)) return 'image';
+    if (videoPortfolioTypes.has(file.type)) return 'video';
+    return null;
+}
+
+function validatePortfolioSignupFile(file: File) {
+    const mediaType = getPortfolioMediaType(file);
+    if (!mediaType) return 'Supported files: jpg, png, webp, mp4, mov, webm.';
+    if (mediaType === 'image' && file.size > maxPortfolioImageSize) return 'Images must be 10MB or smaller.';
+    if (mediaType === 'video' && file.size > maxPortfolioVideoSize) return 'Videos must be 100MB or smaller.';
+    return null;
+}
+
+async function ensurePortfolioBucket(admin: ReturnType<typeof createOptionalAdminClient>) {
+    if (!admin) return;
+    const { data: buckets, error: listError } = await admin.storage.listBuckets();
+    if (listError) throw listError;
+    if (buckets?.some((bucket) => bucket.name === portfolioBucket)) return;
+
+    const { error } = await admin.storage.createBucket(portfolioBucket, {
+        public: true,
+        fileSizeLimit: maxPortfolioVideoSize,
+        allowedMimeTypes: [...imagePortfolioTypes, ...videoPortfolioTypes],
+    });
+    if (error) throw error;
+}
+
+async function recordUserConsent(
+    admin: ReturnType<typeof createOptionalAdminClient>,
+    userId: string,
+    role: string,
+    accountType: string
+) {
+    if (!admin) return;
+
+    const { error } = await admin.from('user_consents').insert({
+        user_id: userId,
+        role,
+        accepted_terms: true,
+        accepted_privacy: true,
+        accepted_refund_policy: true,
+        accepted_creator_agreement: accountType === 'creator',
+        accepted_equipment_terms: accountType === 'equipment_vendor',
+        accepted_ai_disclaimer: true,
+        terms_version: LEGAL_TERMS_VERSION,
+    });
+
+    if (error) {
+        console.error('User consent insert error:', error);
+    }
 }
 
 async function getClientIp() {
@@ -139,6 +206,15 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
     const state = String(formData.get('state') || '').trim()
     const dayRate = toPositiveNumber(formData.get('day_rate'))
     const portfolioUrl = String(formData.get('portfolio_url') || '').trim()
+    const bio = String(formData.get('bio') || '').trim()
+    const location = String(formData.get('location') || '').trim()
+    const serviceTags = toStringArray(formData.get('service_tags'))
+    const eventTags = toStringArray(formData.get('event_tags'))
+    const equipmentTags = toStringArray(formData.get('equipment_tags'))
+    const postProductionTags = toStringArray(formData.get('post_production_tags'))
+    const serviceCities = toStringArray(formData.get('service_cities'))
+    const serviceRadiusKm = toPositiveNumber(formData.get('service_radius_km'))
+    const capacityPerDay = toPositiveNumber(formData.get('capacity_per_day'))
     const whatsappOptIn = toBoolean(formData.get('whatsapp_opt_in'), true)
     const availableForBooking = toBoolean(formData.get('available_for_booking'), true)
     const budgetFlexibility = toBoolean(formData.get('budget_flexibility'), false)
@@ -153,9 +229,14 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
         .split(',')
         .map((item) => item.trim())
         .filter(Boolean)
+    const acceptedPlatformPolicies = String(formData.get('accepted_platform_policies') || '') === 'true'
 
     if (!isValidEmail(email) || !password || !name) {
         return { success: false, message: 'Invalid registration payload provided.' }
+    }
+
+    if (!acceptedPlatformPolicies) {
+        return { success: false, message: 'Please accept ShotcutCrew platform policies to continue.' }
     }
 
     const passwordError = validatePasswordStrength(password);
@@ -166,8 +247,8 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
 
     if (accountType === 'creator') {
         const cleanedPhone = phone.replace(/[^\d+]/g, '')
-        if (!creatorType || !role || !city || cleanedPhone.length < 10) {
-            return { success: false, message: 'Creator phone, city, and primary service are required.' }
+        if (!creatorType || !role || serviceTags.length === 0 || !city || cleanedPhone.length < 10) {
+            return { success: false, message: 'Creator phone, city, main service, and services offered are required.' }
         }
     }
 
@@ -195,6 +276,13 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
                     state,
                     day_rate: dayRate,
                     portfolio_url: portfolioUrl,
+                    service_tags: serviceTags,
+                    event_tags: eventTags,
+                    equipment_tags: equipmentTags,
+                    post_production_tags: postProductionTags,
+                    service_cities: serviceCities,
+                    service_radius_km: serviceRadiusKm,
+                    capacity_per_day: capacityPerDay,
                     whatsapp_opt_in: whatsappOptIn,
                     available_for_booking: availableForBooking,
                     budget_flexibility: budgetFlexibility,
@@ -228,9 +316,11 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
     if (accountType === 'creator' && signupData.user) {
         const admin = createOptionalAdminClient();
         if (admin) {
+            await recordUserConsent(admin, signupData.user.id, creatorType === 'studio_owner' ? 'studio' : 'creator', accountType);
+
             await admin.from('provider_profiles').upsert({
                 user_id: signupData.user.id,
-                provider_type: 'creator',
+                provider_type: creatorType === 'studio_owner' ? 'studio' : 'creator',
                 provider_subtype: creatorType === 'studio_owner' ? 'studio' : 'freelancer',
                 business_name: name.trim(),
                 contact_name: name.trim(),
@@ -243,13 +333,22 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
                 id: signupData.user.id,
                 slug: createSlug(name.trim(), signupData.user.id),
                 role,
+                primary_service: role,
+                service_tags: serviceTags.length > 0 ? serviceTags : [role],
+                event_tags: eventTags,
+                equipment_tags: equipmentTags,
+                post_production_tags: postProductionTags,
                 phone,
                 whatsapp_phone: whatsappPhone || (whatsappOptIn ? phone : null),
+                bio: bio || null,
                 city,
                 state: state || null,
-                location: city,
+                location: location || city,
                 day_rate: dayRate,
                 portfolio_url: portfolioUrl ? JSON.stringify({ link: portfolioUrl, items: [] }) : null,
+                service_cities: serviceCities,
+                service_radius_km: serviceRadiusKm,
+                capacity_per_day: capacityPerDay || null,
                 creator_type: creatorType,
                 whatsapp_opt_in: whatsappOptIn,
                 available_for_booking: availableForBooking,
@@ -260,12 +359,68 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
             if (creatorError) {
                 console.error('Creator profile signup upsert error:', creatorError);
             }
+
+            const portfolioFiles = formData.getAll('portfolio_files').filter((file): file is File => file instanceof File && file.size > 0);
+            if (portfolioFiles.length > 0) {
+                try {
+                    await ensurePortfolioBucket(admin);
+                    const titles = formData.getAll('portfolio_titles').map((item) => String(item || '').trim());
+                    const descriptions = formData.getAll('portfolio_descriptions').map((item) => String(item || '').trim());
+                    const featuredFlags = formData.getAll('portfolio_featured').map((item) => String(item) === 'true');
+                    const publicFlags = formData.getAll('portfolio_public').map((item) => String(item) !== 'false');
+
+                    for (const [index, file] of portfolioFiles.entries()) {
+                        const validationError = validatePortfolioSignupFile(file);
+                        if (validationError) {
+                            console.error(`Portfolio signup upload skipped for ${file.name}: ${validationError}`);
+                            continue;
+                        }
+
+                        const mediaType = getPortfolioMediaType(file);
+                        if (!mediaType) continue;
+
+                        const extension = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || (mediaType === 'image' ? 'jpg' : 'mp4');
+                        const storagePath = `${signupData.user.id}/${Date.now()}-${index}-${crypto.randomUUID()}.${extension}`;
+                        const bytes = Buffer.from(await file.arrayBuffer());
+                        const { error: uploadError } = await admin.storage.from(portfolioBucket).upload(storagePath, bytes, {
+                            contentType: file.type,
+                            upsert: false,
+                        });
+
+                        if (uploadError) {
+                            console.error('Portfolio signup upload error:', uploadError);
+                            continue;
+                        }
+
+                        const { data: publicUrl } = admin.storage.from(portfolioBucket).getPublicUrl(storagePath);
+                        const { error: insertPortfolioError } = await admin.from('portfolio_items').insert({
+                            creator_id: signupData.user.id,
+                            media_url: publicUrl.publicUrl,
+                            media_type: mediaType,
+                            title: titles[index] || file.name.replace(/\.[^/.]+$/, ''),
+                            description: descriptions[index] || null,
+                            featured: Boolean(featuredFlags[index]),
+                            sort_order: index,
+                            is_public: publicFlags[index] !== false,
+                            event_tags: eventTags,
+                        });
+
+                        if (insertPortfolioError) {
+                            console.error('Portfolio signup item insert error:', insertPortfolioError);
+                        }
+                    }
+                } catch (portfolioError) {
+                    console.error('Portfolio signup media processing error:', portfolioError);
+                }
+            }
         }
     }
 
     if (accountType === 'equipment_vendor' && signupData.user) {
         const admin = createOptionalAdminClient();
         if (admin) {
+            await recordUserConsent(admin, signupData.user.id, 'equipment_vendor', accountType);
+
             const profileCompletion = calculateProfileCompletion({
                 businessName: name,
                 contactName: vendorContactName,
@@ -314,6 +469,10 @@ export async function signup(formData: FormData, accountType: string, creatorTyp
                 }
             }
         }
+    }
+
+    if (accountType === 'client' && signupData.user) {
+        await recordUserConsent(createOptionalAdminClient(), signupData.user.id, 'client', accountType);
     }
 
     revalidatePath('/', 'layout')

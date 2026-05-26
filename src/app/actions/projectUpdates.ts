@@ -171,6 +171,24 @@ export async function addProjectUpdate(
         await admin.from("projects").update({ status: "delivered", delivered_at: new Date().toISOString() }).eq("id", projectId);
     }
 
+    if (cleanStatus === "completed" && actor.accountType === "admin") {
+        const { data: financial } = await admin
+            .from("booking_financials")
+            .select("id")
+            .eq("booking_id", projectId)
+            .neq("payout_status", "completed")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (financial?.id) {
+            const { error: payoutReadyError } = await admin.rpc("mark_booking_financial_payout_ready", {
+                p_booking_financial_id: financial.id,
+            });
+            if (payoutReadyError) console.error("Timeline payout ready error:", payoutReadyError);
+        }
+    }
+
     revalidatePath(`/dashboard/${projectId}`);
     revalidatePath(`/opportunities/${projectId}`);
     revalidatePath("/creator-dashboard");
