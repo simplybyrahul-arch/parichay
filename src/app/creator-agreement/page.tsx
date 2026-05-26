@@ -1,6 +1,6 @@
 import { LegalPage } from "@/components/legal/LegalPage";
 import { legalPages } from "@/lib/legal/legalContent";
 
-export default function PrivacyPage() {
-    return <LegalPage page={legalPages.privacy} />;
+export default function CreatorAgreementPage() {
+    return <LegalPage page={legalPages.creatorAgreement} />;
 }

@@ -12,6 +12,7 @@ import { findQuickBookingMatches, selectQuickBookingCreator, type QuickCreatorMa
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { BrandLogo } from "@/components/BrandLogo";
 import {
     BOOKING_CREW_CATEGORIES,
@@ -1989,6 +1990,13 @@ export default function BookingFlow() {
                     )}
 
                 </AnimatePresence>
+                <div className="mt-8 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs font-semibold text-stone-500">
+                    <span>By submitting a request, platform policies may apply:</span>
+                    <Link href="/terms" className="text-orange-600 hover:underline">Terms</Link>
+                    <Link href="/refund-policy" className="text-orange-600 hover:underline">Refund Policy</Link>
+                    <Link href="/equipment-rental-terms" className="text-orange-600 hover:underline">Equipment Terms</Link>
+                    <Link href="/ai-disclaimer" className="text-orange-600 hover:underline">AI Disclaimer</Link>
+                </div>
             </div>
         </main>
     );

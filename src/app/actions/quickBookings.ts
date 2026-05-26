@@ -4,6 +4,7 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { type BudgetTier, getEventTypeLabel } from "@/config/bookingOptions";
+import { upsertQuickBookingFinancials } from "@/lib/payments/bookingFinance";
 
 export type QuickBookingDraft = {
     eventType: string;
@@ -321,6 +322,14 @@ export async function selectQuickBookingCreator(input: QuickBookingDraft & { cre
             console.error("Quick booking create error:", error);
             return { success: false, message: "Could not create quick booking." };
         }
+
+        await upsertQuickBookingFinancials(admin, {
+            id: booking.id,
+            client_id: user.id,
+            creator_id: input.creatorId,
+            custom_budget_amount: draft.customBudgetAmount,
+            estimated_total: draft.estimatedTotal,
+        });
 
         const eventName = getEventTypeLabel(draft.eventType, draft.customEventType);
         const clientName = client?.full_name || "a client";

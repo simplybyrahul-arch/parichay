@@ -4,6 +4,7 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { createProjectUpiPaymentPayload } from "@/lib/payments/upiQr";
+import { markBookingPaymentHeld, upsertProjectBookingFinancials } from "@/lib/payments/bookingFinance";
 
 type ActionResult = {
     success: boolean;
@@ -36,6 +37,7 @@ type ProjectRow = {
     parichay_coordinator_id: string | null;
     status: string | null;
     payment_status: string | null;
+    booking_type?: string | null;
 };
 
 type PaymentRow = {
@@ -93,7 +95,7 @@ async function getActor() {
 async function getProject(admin: ReturnType<typeof createAdminClient>, projectId: string) {
     const { data: project, error } = await admin
         .from("projects")
-        .select("id, title, budget, client_id, selected_creator_id, parichay_coordinator_id, status, payment_status")
+        .select("id, title, budget, client_id, selected_creator_id, parichay_coordinator_id, status, payment_status, booking_type")
         .eq("id", projectId)
         .single();
 
@@ -394,6 +396,16 @@ export async function verifyQrPayment(projectId: string, paymentId: string, veri
         .from("projects")
         .update({ payment_status: "payment_received", status: "completed" })
         .eq("id", project.id);
+
+    await upsertProjectBookingFinancials(admin, {
+        id: project.id,
+        client_id: project.client_id,
+        selected_creator_id: project.selected_creator_id,
+        creator_id: project.selected_creator_id,
+        budget: project.budget,
+        booking_type: project.booking_type,
+    });
+    await markBookingPaymentHeld(admin, project.id, project.booking_type === "equipment" ? "equipment_rental" : "custom_project");
 
     const admins = actor.accountType === "admin" ? [] : await adminUsers(admin);
     await createNotifications(admin, [

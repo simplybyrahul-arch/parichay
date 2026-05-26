@@ -47,6 +47,33 @@ export type VendorRentalRequest = {
     client_name: string | null;
 };
 
+export type VendorAvailabilityDay = {
+    id: string;
+    available_date: string;
+    status: "available" | "limited" | "blocked";
+    notes: string | null;
+};
+
+export type VendorOperator = {
+    id: string;
+    name: string;
+    role: string;
+    phone: string | null;
+    skills: string[];
+    available_for_bookings: boolean;
+    notes: string | null;
+};
+
+export type VendorMaintenanceLog = {
+    id: string;
+    inventory_id: string | null;
+    title: string;
+    status: "scheduled" | "in_progress" | "completed";
+    maintenance_date: string | null;
+    notes: string | null;
+    equipment_name: string | null;
+};
+
 export type VendorDashboardData = {
     user: {
         id: string;
@@ -77,6 +104,9 @@ export type VendorDashboardData = {
     } | null;
     inventory: VendorInventoryItem[];
     requests: VendorRentalRequest[];
+    availability: VendorAvailabilityDay[];
+    operators: VendorOperator[];
+    maintenanceLogs: VendorMaintenanceLog[];
 };
 
 function getRequiredEnv(name: string) {
@@ -141,7 +171,7 @@ async function requireVendor() {
 export async function getVendorDashboardData(): Promise<VendorDashboardData> {
     const { admin, user, userProfile, provider } = await requireVendor();
 
-    const [{ data: vendor }, { data: inventory }, { data: responses }] = await Promise.all([
+    const [{ data: vendor }, { data: inventory }, { data: responses }, { data: availability }, { data: operators }, { data: maintenanceLogs }] = await Promise.all([
         admin
             .from("equipment_vendor_profiles")
             .select("*")
@@ -155,6 +185,21 @@ export async function getVendorDashboardData(): Promise<VendorDashboardData> {
         admin
             .from("equipment_rental_responses")
             .select("*, projects!equipment_rental_responses_project_id_fkey(id, title, description, status, booking_location, event_date, estimated_days, requirement_summary, users!client_id(full_name))")
+            .eq("provider_id", provider.id)
+            .order("created_at", { ascending: false }),
+        admin
+            .from("equipment_vendor_availability")
+            .select("id, available_date, status, notes")
+            .eq("provider_id", provider.id)
+            .order("available_date", { ascending: true }),
+        admin
+            .from("equipment_vendor_operators")
+            .select("id, name, role, phone, skills, available_for_bookings, notes")
+            .eq("provider_id", provider.id)
+            .order("created_at", { ascending: false }),
+        admin
+            .from("equipment_maintenance_logs")
+            .select("id, inventory_id, title, status, maintenance_date, notes, equipment_inventory(equipment_name)")
             .eq("provider_id", provider.id)
             .order("created_at", { ascending: false }),
     ]);
@@ -216,6 +261,28 @@ export async function getVendorDashboardData(): Promise<VendorDashboardData> {
             images: toArray(item.images),
         })),
         requests,
+        availability: ((availability || []) as VendorAvailabilityDay[]).map((day) => ({
+            ...day,
+            status: day.status as VendorAvailabilityDay["status"],
+        })),
+        operators: ((operators || []) as VendorOperator[]).map((operator) => ({
+            ...operator,
+            skills: toArray(operator.skills),
+            available_for_bookings: Boolean(operator.available_for_bookings),
+        })),
+        maintenanceLogs: ((maintenanceLogs || []) as Array<Record<string, unknown>>).map((log) => {
+            const inventoryRecord = log.equipment_inventory as { equipment_name?: string | null } | { equipment_name?: string | null }[] | null | undefined;
+            const inventoryName = Array.isArray(inventoryRecord) ? inventoryRecord[0]?.equipment_name : inventoryRecord?.equipment_name;
+            return {
+                id: String(log.id),
+                inventory_id: log.inventory_id ? String(log.inventory_id) : null,
+                title: String(log.title),
+                status: String(log.status) as VendorMaintenanceLog["status"],
+                maintenance_date: log.maintenance_date ? String(log.maintenance_date) : null,
+                notes: log.notes ? String(log.notes) : null,
+                equipment_name: inventoryName || null,
+            };
+        }),
     };
 }
 
@@ -375,5 +442,159 @@ export async function respondToRentalRequest(responseId: string, status: "availa
     } catch (error) {
         console.error("Rental response update error:", error);
         return { success: false, message: error instanceof Error ? error.message : "Could not update rental request." };
+    }
+}
+
+export async function saveVendorAvailability(formData: FormData): Promise<ActionResult> {
+    try {
+        const { admin, provider } = await requireVendor();
+        const availableDate = cleanText(formData.get("available_date"));
+        const status = cleanText(formData.get("status")) || "available";
+        const allowed = new Set(["available", "limited", "blocked"]);
+
+        if (!availableDate) return { success: false, message: "Date is required." };
+        if (!allowed.has(status)) return { success: false, message: "Invalid availability status." };
+
+        const { error } = await admin
+            .from("equipment_vendor_availability")
+            .upsert({
+                provider_id: provider.id,
+                available_date: availableDate,
+                status,
+                notes: cleanText(formData.get("notes")) || null,
+                updated_at: new Date().toISOString(),
+            }, { onConflict: "provider_id,available_date" });
+
+        if (error) throw error;
+        revalidatePath("/vendor-dashboard");
+        return { success: true, message: "Availability saved." };
+    } catch (error) {
+        console.error("Vendor availability save error:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Could not save availability." };
+    }
+}
+
+export async function deleteVendorAvailability(availabilityId: string): Promise<ActionResult> {
+    try {
+        const { admin, provider } = await requireVendor();
+        const { error } = await admin
+            .from("equipment_vendor_availability")
+            .delete()
+            .eq("id", availabilityId)
+            .eq("provider_id", provider.id);
+
+        if (error) throw error;
+        revalidatePath("/vendor-dashboard");
+        return { success: true, message: "Availability removed." };
+    } catch (error) {
+        console.error("Vendor availability delete error:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Could not remove availability." };
+    }
+}
+
+export async function saveVendorOperator(formData: FormData): Promise<ActionResult> {
+    try {
+        const { admin, provider } = await requireVendor();
+        const id = cleanText(formData.get("id"));
+        const name = cleanText(formData.get("name"));
+        const role = cleanText(formData.get("role"));
+
+        if (!name || !role) return { success: false, message: "Operator name and role are required." };
+
+        const payload = {
+            provider_id: provider.id,
+            name,
+            role,
+            phone: cleanText(formData.get("phone")) || null,
+            skills: cleanText(formData.get("skills")).split(",").map((item) => item.trim()).filter(Boolean),
+            available_for_bookings: String(formData.get("available_for_bookings")) === "true",
+            notes: cleanText(formData.get("notes")) || null,
+            updated_at: new Date().toISOString(),
+        };
+
+        const query = id
+            ? admin.from("equipment_vendor_operators").update(payload).eq("id", id).eq("provider_id", provider.id)
+            : admin.from("equipment_vendor_operators").insert(payload);
+
+        const { error } = await query;
+        if (error) throw error;
+        revalidatePath("/vendor-dashboard");
+        return { success: true, message: "Operator saved." };
+    } catch (error) {
+        console.error("Vendor operator save error:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Could not save operator." };
+    }
+}
+
+export async function deleteVendorOperator(operatorId: string): Promise<ActionResult> {
+    try {
+        const { admin, provider } = await requireVendor();
+        const { error } = await admin
+            .from("equipment_vendor_operators")
+            .delete()
+            .eq("id", operatorId)
+            .eq("provider_id", provider.id);
+
+        if (error) throw error;
+        revalidatePath("/vendor-dashboard");
+        return { success: true, message: "Operator deleted." };
+    } catch (error) {
+        console.error("Vendor operator delete error:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Could not delete operator." };
+    }
+}
+
+export async function saveMaintenanceLog(formData: FormData): Promise<ActionResult> {
+    try {
+        const { admin, provider } = await requireVendor();
+        const id = cleanText(formData.get("id"));
+        const title = cleanText(formData.get("title"));
+        const status = cleanText(formData.get("status")) || "scheduled";
+        const inventoryId = cleanText(formData.get("inventory_id")) || null;
+        const allowed = new Set(["scheduled", "in_progress", "completed"]);
+
+        if (!title) return { success: false, message: "Maintenance title is required." };
+        if (!allowed.has(status)) return { success: false, message: "Invalid maintenance status." };
+
+        if (inventoryId) {
+            const { data: item } = await admin
+                .from("equipment_inventory")
+                .select("id")
+                .eq("id", inventoryId)
+                .eq("provider_id", provider.id)
+                .maybeSingle();
+            if (!item) return { success: false, message: "Selected inventory item was not found." };
+        }
+
+        const payload = {
+            provider_id: provider.id,
+            inventory_id: inventoryId,
+            title,
+            status,
+            maintenance_date: cleanText(formData.get("maintenance_date")) || null,
+            notes: cleanText(formData.get("notes")) || null,
+            updated_at: new Date().toISOString(),
+        };
+
+        const query = id
+            ? admin.from("equipment_maintenance_logs").update(payload).eq("id", id).eq("provider_id", provider.id)
+            : admin.from("equipment_maintenance_logs").insert(payload);
+
+        const { error } = await query;
+        if (error) throw error;
+
+        if (inventoryId && status !== "completed") {
+            await admin
+                .from("equipment_inventory")
+                .update({ availability_status: "maintenance", updated_at: new Date().toISOString() })
+                .eq("id", inventoryId)
+                .eq("provider_id", provider.id);
+        }
+
+        revalidatePath("/vendor-dashboard");
+        return { success: true, message: "Maintenance log saved." };
+    } catch (error) {
+        console.error("Maintenance log save error:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Could not save maintenance log." };
     }
 }

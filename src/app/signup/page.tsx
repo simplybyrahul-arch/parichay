@@ -1,33 +1,62 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowRight, Mail, Lock, User, Briefcase, Building2, Eye, EyeOff, PackageCheck } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { ArrowRight, Mail, Lock, User, Briefcase, Building2, Eye, EyeOff, PackageCheck, Upload, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { signup } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
-import { creatorServiceOptions } from "@/lib/creators/services";
+import { commaList, creatorServiceLabel, creatorServiceOptions, parseCommaList } from "@/lib/creators/services";
 import { validatePasswordStrength } from "@/utils/auth-security";
 import { EQUIPMENT_VENDOR_CATEGORIES } from "@/lib/equipment/vendors";
+import {
+    BOOKING_CREW_CATEGORIES,
+    BOOKING_EVENT_CATEGORIES,
+    EQUIPMENT_REQUIREMENT_CATEGORIES,
+    POST_PRODUCTION_CATEGORIES,
+    type BookingCategory,
+} from "@/config/bookingOptions";
+
+const acceptedPortfolioTypes = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime", "video/webm"]);
+const maxPortfolioImageSize = 10 * 1024 * 1024;
+const maxPortfolioVideoSize = 100 * 1024 * 1024;
 
 export default function SignupPage() {
     const [accountType, setAccountType] = useState<"client" | "creator" | "equipment_vendor" | null>(null);
     const [creatorType, setCreatorType] = useState<"studio_owner" | "freelancer" | null>(null);
     const [step, setStep] = useState(1); // 1=account type, 2=creator sub-type, 3=credentials
     const [formData, setFormData] = useState({ name: "", email: "", password: "", confirmPassword: "" });
+    const [termsAccepted, setTermsAccepted] = useState(false);
     const [creatorForm, setCreatorForm] = useState({
         phone: "",
         whatsappPhone: "",
         city: "",
         state: "",
         role: "",
+        serviceTags: [] as string[],
+        eventTags: [] as string[],
+        equipmentTags: [] as string[],
+        postProductionTags: [] as string[],
         dayRate: "",
         portfolioUrl: "",
+        bio: "",
+        location: "",
+        serviceCities: "",
+        serviceRadiusKm: "",
+        capacityPerDay: "",
         whatsappOptIn: true,
         availableForBooking: true,
         travelEnabled: false,
         budgetFlexibility: false,
     });
+    const [portfolioDrafts, setPortfolioDrafts] = useState<Array<{
+        id: string;
+        file: File;
+        title: string;
+        description: string;
+        featured: boolean;
+        isPublic: boolean;
+    }>>([]);
     const [vendorForm, setVendorForm] = useState({
         contactName: "",
         phone: "",
@@ -69,6 +98,153 @@ export default function SignupPage() {
         }));
     };
 
+    const creatorProgressSteps = [
+        "Account",
+        "Contact",
+        "Services",
+        "Availability",
+        "Portfolio",
+        "Review",
+    ];
+
+    const creatorStepIndex = Math.max(0, Math.min(creatorProgressSteps.length - 1, step - 3));
+    const creatorStepTitle = creatorProgressSteps[creatorStepIndex] || "Account";
+    const primaryService = creatorForm.role || creatorForm.serviceTags[0] || "";
+    const selectedServiceNames = creatorForm.serviceTags.map(creatorServiceLabel);
+    const selectedEventNames = creatorForm.eventTags.map(creatorServiceLabel);
+    const selectedEquipmentNames = creatorForm.equipmentTags.map(creatorServiceLabel);
+    const selectedPostProductionNames = creatorForm.postProductionTags.map(creatorServiceLabel);
+
+    const creatorStepIsValid = (targetStep = step) => {
+        if (targetStep === 3) {
+            if (!formData.name.trim()) return "Please enter your name or studio name.";
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) return "Please enter a valid email address.";
+            const passwordError = validatePasswordStrength(formData.password);
+            if (passwordError) return passwordError;
+            if (formData.password !== formData.confirmPassword) return "Passwords do not match.";
+            if (!termsAccepted) return "Please accept the Terms and Privacy Policy.";
+        }
+        if (targetStep === 4) {
+            const cleanedPhone = creatorForm.phone.replace(/[^\d+]/g, "");
+            if (cleanedPhone.length < 10) return "Please enter a valid phone number.";
+            if (!creatorForm.city.trim()) return "Please enter your city.";
+        }
+        if (targetStep === 5) {
+            if (!primaryService) return "Please select your main service.";
+            if (creatorForm.serviceTags.length === 0) return "Please select at least one service offered.";
+        }
+        if (targetStep === 6) {
+            if (creatorForm.dayRate && Number(creatorForm.dayRate) <= 0) return "Base day rate must be positive if provided.";
+        }
+        return "";
+    };
+
+    const goToNextCreatorStep = () => {
+        const error = creatorStepIsValid();
+        if (error) {
+            setErrorMsg(error);
+            return;
+        }
+        setErrorMsg("");
+        setStep((current) => Math.min(8, current + 1));
+    };
+
+    const goToPreviousCreatorStep = () => {
+        setErrorMsg("");
+        if (step === 3) {
+            setStep(2);
+            return;
+        }
+        setStep((current) => Math.max(3, current - 1));
+    };
+
+    const toggleCreatorTag = (field: "serviceTags" | "eventTags" | "equipmentTags" | "postProductionTags", value: string) => {
+        setCreatorForm((current) => {
+            const selected = current[field].includes(value)
+                ? current[field].filter((item) => item !== value)
+                : [...current[field], value];
+            return {
+                ...current,
+                [field]: selected,
+                role: field === "serviceTags" && !current.role && selected.length > 0 ? selected[0] : current.role,
+            };
+        });
+    };
+
+    const selectAllCreatorTags = (field: "serviceTags" | "eventTags" | "equipmentTags" | "postProductionTags", options: Array<{ id: string }>) => {
+        setCreatorForm((current) => {
+            const ids = options.map((option) => option.id);
+            const merged = Array.from(new Set([...current[field], ...ids]));
+            return {
+                ...current,
+                [field]: merged,
+                role: field === "serviceTags" && !current.role && merged.length > 0 ? merged[0] : current.role,
+            };
+        });
+    };
+
+    const clearCreatorTags = (field: "serviceTags" | "eventTags" | "equipmentTags" | "postProductionTags", options: Array<{ id: string }>) => {
+        const ids = new Set(options.map((option) => option.id));
+        setCreatorForm((current) => ({
+            ...current,
+            [field]: current[field].filter((item) => !ids.has(item)),
+        }));
+    };
+
+    const validatePortfolioFile = (file: File) => {
+        if (!acceptedPortfolioTypes.has(file.type)) return "Supported files: jpg, png, webp, mp4, mov, webm.";
+        const isVideo = file.type.startsWith("video/");
+        if (!isVideo && file.size > maxPortfolioImageSize) return "Images must be 10MB or smaller.";
+        if (isVideo && file.size > maxPortfolioVideoSize) return "Videos must be 100MB or smaller.";
+        return "";
+    };
+
+    const handlePortfolioFiles = (files: FileList | null) => {
+        if (!files) return;
+        const nextDrafts: typeof portfolioDrafts = [];
+        for (const file of Array.from(files)) {
+            const error = validatePortfolioFile(file);
+            if (error) {
+                setErrorMsg(`${file.name}: ${error}`);
+                continue;
+            }
+            nextDrafts.push({
+                id: crypto.randomUUID(),
+                file,
+                title: file.name.replace(/\.[^/.]+$/, ""),
+                description: "",
+                featured: portfolioDrafts.length === 0 && nextDrafts.length === 0,
+                isPublic: true,
+            });
+        }
+        if (nextDrafts.length > 0) {
+            setErrorMsg("");
+            setPortfolioDrafts((current) => [...current, ...nextDrafts]);
+        }
+    };
+
+    const updatePortfolioDraft = (id: string, values: Partial<(typeof portfolioDrafts)[number]>) => {
+        setPortfolioDrafts((current) => current.map((item) => {
+            if (item.id !== id) {
+                return values.featured ? { ...item, featured: false } : item;
+            }
+            return { ...item, ...values };
+        }));
+    };
+
+    const removePortfolioDraft = (id: string) => {
+        setPortfolioDrafts((current) => current.filter((item) => item.id !== id));
+    };
+
+    const creatorSummary = useMemo(() => ({
+        mainService: creatorServiceLabel(primaryService),
+        services: selectedServiceNames,
+        events: selectedEventNames,
+        equipment: selectedEquipmentNames,
+        post: selectedPostProductionNames,
+        serviceCities: parseCommaList(creatorForm.serviceCities),
+    }), [primaryService, selectedServiceNames, selectedEventNames, selectedEquipmentNames, selectedPostProductionNames, creatorForm.serviceCities]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -96,9 +272,22 @@ export default function SignupPage() {
             return;
         }
 
+        if (!termsAccepted) {
+            setErrorMsg("Please accept ShotcutCrew platform policies to continue.");
+            setLoading(false);
+            return;
+        }
+
         if (accountType === "creator") {
             if (!creatorType) {
                 setErrorMsg("Please choose Freelancer or Studio Owner.");
+                setLoading(false);
+                return;
+            }
+
+            const creatorStepError = [3, 4, 5, 6].map((stepNumber) => creatorStepIsValid(stepNumber)).find(Boolean);
+            if (creatorStepError) {
+                setErrorMsg(creatorStepError);
                 setLoading(false);
                 return;
             }
@@ -116,7 +305,7 @@ export default function SignupPage() {
                 return;
             }
 
-            if (!creatorForm.role) {
+            if (!primaryService) {
                 setErrorMsg("Please select your primary service.");
                 setLoading(false);
                 return;
@@ -163,17 +352,34 @@ export default function SignupPage() {
             data.append("name", formData.name);
             data.append("email", formData.email);
             data.append("password", formData.password);
+            data.append("accepted_platform_policies", String(termsAccepted));
             data.append("phone", creatorForm.phone);
             data.append("whatsapp_phone", creatorForm.whatsappPhone || (creatorForm.whatsappOptIn ? creatorForm.phone : ""));
             data.append("city", creatorForm.city);
             data.append("state", creatorForm.state);
-            data.append("role", creatorForm.role);
+            data.append("role", primaryService);
+            data.append("bio", creatorForm.bio);
+            data.append("location", creatorForm.location || creatorForm.city);
+            data.append("service_tags", creatorForm.serviceTags.join(","));
+            data.append("event_tags", creatorForm.eventTags.join(","));
+            data.append("equipment_tags", creatorForm.equipmentTags.join(","));
+            data.append("post_production_tags", creatorForm.postProductionTags.join(","));
+            data.append("service_cities", creatorForm.serviceCities);
+            data.append("service_radius_km", creatorForm.serviceRadiusKm);
+            data.append("capacity_per_day", creatorForm.capacityPerDay);
             data.append("day_rate", creatorForm.dayRate);
             data.append("portfolio_url", creatorForm.portfolioUrl);
             data.append("whatsapp_opt_in", String(creatorForm.whatsappOptIn));
             data.append("available_for_booking", String(creatorForm.availableForBooking));
             data.append("travel_enabled", String(creatorForm.travelEnabled));
             data.append("budget_flexibility", String(creatorForm.budgetFlexibility));
+            portfolioDrafts.forEach((item) => {
+                data.append("portfolio_files", item.file);
+                data.append("portfolio_titles", item.title);
+                data.append("portfolio_descriptions", item.description);
+                data.append("portfolio_featured", String(item.featured));
+                data.append("portfolio_public", String(item.isPublic));
+            });
             if (accountType === "equipment_vendor") {
                 data.set("phone", vendorForm.phone);
                 data.set("whatsapp_phone", vendorForm.whatsappPhone || vendorForm.phone);
@@ -363,8 +569,168 @@ export default function SignupPage() {
                         </motion.div>
                     )}
 
+                    {!signupComplete && accountType === "creator" && step >= 3 && step <= 8 && (
+                        <motion.div
+                            key={`creator-step-${step}`}
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="bg-white p-8 md:p-10 rounded-[2rem] shadow-2xl shadow-stone-200/50 border border-stone-100"
+                        >
+                            <button type="button" onClick={goToPreviousCreatorStep} className="text-stone-400 hover:text-stone-900 text-sm mb-6 transition-colors font-bold">
+                                ← Back
+                            </button>
+                            <div className="mb-6">
+                                <p className="text-xs font-black uppercase tracking-wide text-orange-600">Step {creatorStepIndex + 1} of {creatorProgressSteps.length}</p>
+                                <h1 className="text-3xl font-black tracking-tight text-stone-900 mt-1 font-display">
+                                    {creatorStepTitle === "Account" ? (creatorType === "studio_owner" ? "Create Studio Account" : "Create Freelancer Account") : creatorStepTitle}
+                                </h1>
+                                <div className="mt-4 h-2 rounded-full bg-stone-100">
+                                    <div className="h-full rounded-full bg-orange-600 transition-all" style={{ width: `${((creatorStepIndex + 1) / creatorProgressSteps.length) * 100}%` }} />
+                                </div>
+                            </div>
+
+                            {errorMsg && (
+                                <div className="mb-6 p-4 bg-red-50 text-red-600 text-sm rounded-xl font-medium border border-red-100">
+                                    {errorMsg}
+                                </div>
+                            )}
+
+                            <form
+                                onSubmit={(event) => {
+                                    if (step < 8) {
+                                        event.preventDefault();
+                                        goToNextCreatorStep();
+                                        return;
+                                    }
+                                    handleSubmit(event);
+                                }}
+                                className="space-y-6"
+                            >
+                                {step === 3 && (
+                                    <div className="space-y-5">
+                                        <SignupInput icon={<User className="w-5 h-5" />} label={creatorType === "studio_owner" ? "Studio / Business Name" : "Full Name"} value={formData.name} onChange={(value) => setFormData({ ...formData, name: value })} placeholder={creatorType === "studio_owner" ? "Your studio name" : "Your full name"} required />
+                                        <SignupInput icon={<Mail className="w-5 h-5" />} label="Email Address" type="email" value={formData.email} onChange={(value) => setFormData({ ...formData, email: value })} placeholder="hello@example.com" required />
+                                        <PasswordInput label="Password" value={formData.password} onChange={(value) => setFormData({ ...formData, password: value })} show={showPassword} onToggle={() => setShowPassword(!showPassword)} />
+                                        <PasswordInput label="Confirm Password" value={formData.confirmPassword} onChange={(value) => setFormData({ ...formData, confirmPassword: value })} show={showConfirmPassword} onToggle={() => setShowConfirmPassword(!showConfirmPassword)} />
+                                        <label className="flex items-start gap-3 cursor-pointer">
+                                            <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 w-4 h-4 text-orange-600 rounded border-stone-300 focus:ring-orange-500" />
+                                            <PolicyConsentText accountType={accountType} creatorType={creatorType} />
+                                        </label>
+                                    </div>
+                                )}
+
+                                {step === 4 && (
+                                    <div className="space-y-5">
+                                        <div className="grid md:grid-cols-2 gap-4">
+                                            <PlainInput label="Phone Number" type="tel" value={creatorForm.phone} onChange={(value) => setCreatorForm({ ...creatorForm, phone: value })} placeholder="10 digit mobile number" required />
+                                            <PlainInput label="WhatsApp Number" type="tel" value={creatorForm.whatsappPhone} onChange={(value) => setCreatorForm({ ...creatorForm, whatsappPhone: value })} placeholder="Leave blank to use phone" />
+                                            <PlainInput label="City" value={creatorForm.city} onChange={(value) => setCreatorForm({ ...creatorForm, city: value })} placeholder="e.g. Bilaspur" required />
+                                            <PlainInput label="State" value={creatorForm.state} onChange={(value) => setCreatorForm({ ...creatorForm, state: value })} placeholder="e.g. Chhattisgarh" />
+                                        </div>
+                                        <label className="block">
+                                            <span className="block text-sm font-bold text-stone-700 mb-1.5">Bio / Introduction</span>
+                                            <textarea value={creatorForm.bio} onChange={(event) => setCreatorForm({ ...creatorForm, bio: event.target.value })} rows={4} placeholder={creatorType === "studio_owner" ? "Describe your studio, team, and production strengths." : "Briefly describe your experience and creative style."} className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors" />
+                                        </label>
+                                        <PlainInput label={creatorType === "studio_owner" ? "Studio Location / Address" : "Location / Address"} value={creatorForm.location} onChange={(value) => setCreatorForm({ ...creatorForm, location: value })} placeholder="Area, landmark, studio address, or service location" />
+                                    </div>
+                                )}
+
+                                {step === 5 && (
+                                    <div className="space-y-5">
+                                        <label className="block">
+                                            <span className="block text-sm font-bold text-stone-700 mb-1.5">Main Service</span>
+                                            <select value={creatorForm.role} onChange={(e) => setCreatorForm({ ...creatorForm, role: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors">
+                                                <option value="">Select headline service</option>
+                                                {creatorServiceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                            </select>
+                                        </label>
+                                        <CategoryPicker title="Services Offered" helper={`${creatorForm.serviceTags.length} selected. Required for matching.`} categories={BOOKING_CREW_CATEGORIES} selected={creatorForm.serviceTags} onToggle={(value) => toggleCreatorTag("serviceTags", value)} onSelectAll={(options) => selectAllCreatorTags("serviceTags", options)} onClear={(options) => clearCreatorTags("serviceTags", options)} />
+                                        <CategoryPicker title="Event Types Served" helper={`${creatorForm.eventTags.length} selected. Recommended for better booking matches.`} categories={BOOKING_EVENT_CATEGORIES} selected={creatorForm.eventTags} onToggle={(value) => toggleCreatorTag("eventTags", value)} onSelectAll={(options) => selectAllCreatorTags("eventTags", options)} onClear={(options) => clearCreatorTags("eventTags", options)} />
+                                        <CategoryPicker title="Equipment Available / Supported" helper="Optional: select gear you own or can arrange professionally." categories={EQUIPMENT_REQUIREMENT_CATEGORIES} selected={creatorForm.equipmentTags} onToggle={(value) => toggleCreatorTag("equipmentTags", value)} onSelectAll={(options) => selectAllCreatorTags("equipmentTags", options)} onClear={(options) => clearCreatorTags("equipmentTags", options)} />
+                                        <CategoryPicker title="Post Production Services" helper="Optional: select editing and finishing services you provide." categories={POST_PRODUCTION_CATEGORIES} selected={creatorForm.postProductionTags} onToggle={(value) => toggleCreatorTag("postProductionTags", value)} onSelectAll={(options) => selectAllCreatorTags("postProductionTags", options)} onClear={(options) => clearCreatorTags("postProductionTags", options)} />
+                                    </div>
+                                )}
+
+                                {step === 6 && (
+                                    <div className="space-y-5">
+                                        <div className="grid md:grid-cols-2 gap-4">
+                                            <PlainInput label="Base Day Rate" type="number" value={creatorForm.dayRate} onChange={(value) => setCreatorForm({ ...creatorForm, dayRate: value })} placeholder="Format: 15000" />
+                                            <PlainInput label="Capacity Per Day" type="number" value={creatorForm.capacityPerDay} onChange={(value) => setCreatorForm({ ...creatorForm, capacityPerDay: value })} placeholder="e.g. 2 shoots/day" />
+                                            <PlainInput label="Service Cities" value={creatorForm.serviceCities} onChange={(value) => setCreatorForm({ ...creatorForm, serviceCities: value })} placeholder="Bilaspur, Raipur, Durg" />
+                                            <PlainInput label="Service Radius km" type="number" value={creatorForm.serviceRadiusKm} onChange={(value) => setCreatorForm({ ...creatorForm, serviceRadiusKm: value })} placeholder="0" />
+                                        </div>
+                                        <div className="grid sm:grid-cols-2 gap-3">
+                                            <ToggleLabel label="WhatsApp opt-in" checked={creatorForm.whatsappOptIn} onChange={(checked) => setCreatorForm({ ...creatorForm, whatsappOptIn: checked })} />
+                                            <ToggleLabel label="Available for booking" checked={creatorForm.availableForBooking} onChange={(checked) => setCreatorForm({ ...creatorForm, availableForBooking: checked })} />
+                                            <ToggleLabel label="Travel enabled" checked={creatorForm.travelEnabled} onChange={(checked) => setCreatorForm({ ...creatorForm, travelEnabled: checked })} />
+                                            <ToggleLabel label="Budget flexibility" checked={creatorForm.budgetFlexibility} onChange={(checked) => setCreatorForm({ ...creatorForm, budgetFlexibility: checked })} />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {step === 7 && (
+                                    <div className="space-y-5">
+                                        <PlainInput label={creatorType === "studio_owner" ? "Studio Portfolio URL" : "Portfolio URL"} type="url" value={creatorForm.portfolioUrl} onChange={(value) => setCreatorForm({ ...creatorForm, portfolioUrl: value })} placeholder="https://yourportfolio.com" />
+                                        <div className="rounded-2xl border border-dashed border-orange-200 bg-orange-50/50 p-5">
+                                            <input id="creator-portfolio-upload" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" onChange={(event) => handlePortfolioFiles(event.target.files)} className="hidden" />
+                                            <label htmlFor="creator-portfolio-upload" className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl bg-white p-6 text-center shadow-sm">
+                                                <Upload className="w-8 h-8 text-orange-600" />
+                                                <span className="font-black text-stone-900">Upload Photos / Videos</span>
+                                                <span className="text-xs font-semibold text-stone-500">Images up to 10MB, videos up to 100MB. Optional during signup.</span>
+                                            </label>
+                                        </div>
+                                        {portfolioDrafts.length > 0 && (
+                                            <div className="space-y-3">
+                                                {portfolioDrafts.map((item) => (
+                                                    <div key={item.id} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <div>
+                                                                <p className="font-black text-stone-900">{item.file.name}</p>
+                                                                <p className="text-xs font-semibold text-stone-500">{item.file.type.startsWith("video/") ? "Video" : "Image"} · {(item.file.size / (1024 * 1024)).toFixed(1)}MB</p>
+                                                            </div>
+                                                            <button type="button" onClick={() => removePortfolioDraft(item.id)} className="rounded-full bg-white p-2 text-red-600"><X className="w-4 h-4" /></button>
+                                                        </div>
+                                                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                                            <PlainInput label="Title" value={item.title} onChange={(value) => updatePortfolioDraft(item.id, { title: value })} placeholder="Project title" />
+                                                            <PlainInput label="Description" value={item.description} onChange={(value) => updatePortfolioDraft(item.id, { description: value })} placeholder="Short description" />
+                                                        </div>
+                                                        <div className="mt-3 grid sm:grid-cols-2 gap-3">
+                                                            <ToggleLabel label="Public" checked={item.isPublic} onChange={(checked) => updatePortfolioDraft(item.id, { isPublic: checked })} />
+                                                            <ToggleLabel label="Featured Work" checked={item.featured} onChange={(checked) => updatePortfolioDraft(item.id, { featured: checked })} />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {step === 8 && (
+                                    <CreatorSignupReview
+                                        creatorType={creatorType}
+                                        formData={formData}
+                                        creatorForm={creatorForm}
+                                        summary={creatorSummary}
+                                        portfolioCount={portfolioDrafts.length}
+                                    />
+                                )}
+
+                                <div className="flex gap-3 pt-2">
+                                    <button type="button" onClick={goToPreviousCreatorStep} className="flex-1 py-4 bg-stone-100 text-stone-700 font-bold rounded-xl hover:bg-stone-200 transition-colors">Back</button>
+                                    {step < 8 ? (
+                                        <button type="button" onClick={goToNextCreatorStep} className="flex-[2] py-4 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors">Continue</button>
+                                    ) : (
+                                        <button type="submit" disabled={loading} className="flex-[2] py-4 bg-stone-900 text-white font-bold rounded-xl hover:bg-stone-800 transition-colors disabled:opacity-70">
+                                            {loading ? "Creating Account..." : "Complete Signup"}
+                                        </button>
+                                    )}
+                                </div>
+                            </form>
+                        </motion.div>
+                    )}
+
                     {/* STEP 3: Credentials Form */}
-                    {!signupComplete && step === 3 && (
+                    {!signupComplete && step === 3 && isNonCreatorSignup(accountType) && (
                         <motion.div
                             key="step3-credentials"
                             initial={{ opacity: 0, x: 20 }}
@@ -643,10 +1009,8 @@ export default function SignupPage() {
 
                                 {/* Terms Acceptance */}
                                 <label className="flex items-start gap-3 mt-4 cursor-pointer">
-                                    <input type="checkbox" required className="mt-1 w-4 h-4 text-orange-600 rounded border-stone-300 focus:ring-orange-500" />
-                                    <span className="text-sm text-stone-600 select-none">
-                                        I agree to the ShotcutCrew <Link href="/terms" className="font-bold text-orange-600 hover:underline">Terms of Service</Link> and <Link href="/privacy" className="font-bold text-orange-600 hover:underline">Privacy Policy</Link>.
-                                    </span>
+                                    <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} required className="mt-1 w-4 h-4 text-orange-600 rounded border-stone-300 focus:ring-orange-500" />
+                                    <PolicyConsentText accountType={accountType} creatorType={creatorType} />
                                 </label>
 
                                 <button
@@ -664,6 +1028,269 @@ export default function SignupPage() {
                 </AnimatePresence>
             </div>
         </main>
+    );
+}
+
+function isNonCreatorSignup(accountType: "client" | "creator" | "equipment_vendor" | null): boolean {
+    return accountType !== "creator";
+}
+
+function PolicyConsentText({
+    accountType,
+    creatorType,
+}: {
+    accountType: "client" | "creator" | "equipment_vendor" | null;
+    creatorType: "studio_owner" | "freelancer" | null;
+}) {
+    const roleNote = accountType === "equipment_vendor"
+        ? "This includes equipment rental, deposit, damage, delivery, logistics, and operator responsibilities."
+        : accountType === "creator"
+            ? `This includes the ${creatorType === "studio_owner" ? "studio/provider" : "creator/provider"} agreement, marketplace conduct, commission, and payout policies.`
+            : "This includes booking, refund, payment, and AI-assisted platform policies.";
+
+    return (
+        <span className="text-sm text-stone-600 select-none leading-relaxed">
+            I agree to ShotcutCrew&apos;s{" "}
+            <Link href="/terms" className="font-bold text-orange-600 hover:underline">Terms of Service</Link>,{" "}
+            <Link href="/privacy" className="font-bold text-orange-600 hover:underline">Privacy Policy</Link>, and applicable platform policies.{" "}
+            <span className="block mt-1 text-xs text-stone-500">
+                {roleNote} See{" "}
+                <Link href="/refund-policy" className="font-bold text-orange-600 hover:underline">Refund Policy</Link>,{" "}
+                <Link href="/creator-agreement" className="font-bold text-orange-600 hover:underline">Creator Agreement</Link>,{" "}
+                <Link href="/equipment-rental-terms" className="font-bold text-orange-600 hover:underline">Equipment Rental Terms</Link>, and{" "}
+                <Link href="/ai-disclaimer" className="font-bold text-orange-600 hover:underline">AI Disclaimer</Link>.
+            </span>
+        </span>
+    );
+}
+
+function SignupInput({
+    label,
+    value,
+    onChange,
+    placeholder,
+    icon,
+    type = "text",
+    required = false,
+}: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder: string;
+    icon: ReactNode;
+    type?: string;
+    required?: boolean;
+}) {
+    return (
+        <div>
+            <label className="block text-sm font-bold text-stone-700 mb-1.5">{label}</label>
+            <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400">{icon}</span>
+                <input
+                    type={type}
+                    value={value}
+                    onChange={(event) => onChange(event.target.value)}
+                    placeholder={placeholder}
+                    required={required}
+                    className="w-full pl-12 pr-4 py-4 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+                />
+            </div>
+        </div>
+    );
+}
+
+function PasswordInput({
+    label,
+    value,
+    onChange,
+    show,
+    onToggle,
+}: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    show: boolean;
+    onToggle: () => void;
+}) {
+    return (
+        <div>
+            <label className="block text-sm font-bold text-stone-700 mb-1.5">{label}</label>
+            <div className="relative">
+                <Lock className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                    type={show ? "text" : "password"}
+                    value={value}
+                    onChange={(event) => onChange(event.target.value)}
+                    placeholder="Min. 10 chars, uppercase, lowercase, number"
+                    minLength={10}
+                    required
+                    className="w-full pl-12 pr-12 py-4 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+                />
+                <button type="button" onClick={onToggle} className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 transition-colors p-1">
+                    {show ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function PlainInput({
+    label,
+    value,
+    onChange,
+    placeholder,
+    type = "text",
+    required = false,
+}: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder: string;
+    type?: string;
+    required?: boolean;
+}) {
+    return (
+        <label className="block">
+            <span className="block text-sm font-bold text-stone-700 mb-1.5">{label}</span>
+            <input
+                type={type}
+                min={type === "number" ? 0 : undefined}
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                placeholder={placeholder}
+                required={required}
+                className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-stone-50 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-stone-900 transition-colors"
+            />
+        </label>
+    );
+}
+
+function CategoryPicker({
+    title,
+    helper,
+    categories,
+    selected,
+    onToggle,
+    onSelectAll,
+    onClear,
+}: {
+    title: string;
+    helper: string;
+    categories: BookingCategory[];
+    selected: string[];
+    onToggle: (value: string) => void;
+    onSelectAll: (options: Array<{ id: string }>) => void;
+    onClear: (options: Array<{ id: string }>) => void;
+}) {
+    const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({ [categories[0]?.id || ""]: true });
+    return (
+        <div className="rounded-2xl border border-stone-100 bg-stone-50 p-4">
+            <div className="mb-3">
+                <h3 className="text-sm font-black text-stone-900">{title}</h3>
+                <p className="text-xs font-semibold text-stone-500 mt-1">{helper}</p>
+            </div>
+            <div className="space-y-3">
+                {categories.map((category) => {
+                    const isOpen = openCategories[category.id] ?? false;
+                    const selectedCount = category.options.filter((option) => selected.includes(option.id)).length;
+                    return (
+                        <section key={category.id} className="overflow-hidden rounded-xl border border-stone-200 bg-white">
+                            <button
+                                type="button"
+                                onClick={() => setOpenCategories((current) => ({ ...current, [category.id]: !isOpen }))}
+                                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                            >
+                                <span className="font-black text-sm text-stone-800">{category.label}</span>
+                                <span className="text-xs font-bold text-stone-500">{selectedCount ? `${selectedCount} selected` : isOpen ? "Hide" : "Show"}</span>
+                            </button>
+                            {isOpen && (
+                                <div className="space-y-3 p-4 pt-0">
+                                    <div className="flex gap-2">
+                                        <button type="button" onClick={() => onSelectAll(category.options)} className="rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700">Select all</button>
+                                        <button type="button" onClick={() => onClear(category.options)} className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-bold text-stone-600">Clear</button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {category.options.map((option) => {
+                                            const isSelected = selected.includes(option.id);
+                                            return (
+                                                <button
+                                                    key={option.id}
+                                                    type="button"
+                                                    onClick={() => onToggle(option.id)}
+                                                    className={`rounded-full border px-3 py-2 text-xs font-bold transition-colors ${isSelected ? "border-orange-500 bg-orange-50 text-orange-700" : "border-stone-200 bg-white text-stone-600 hover:border-orange-300"}`}
+                                                >
+                                                    {option.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </section>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+function CreatorSignupReview({
+    creatorType,
+    formData,
+    creatorForm,
+    summary,
+    portfolioCount,
+}: {
+    creatorType: "studio_owner" | "freelancer" | null;
+    formData: { name: string; email: string };
+    creatorForm: {
+        phone: string;
+        whatsappPhone: string;
+        city: string;
+        state: string;
+        dayRate: string;
+        portfolioUrl: string;
+        serviceCities: string;
+    };
+    summary: {
+        mainService: string;
+        services: string[];
+        events: string[];
+        equipment: string[];
+        post: string[];
+        serviceCities: string[];
+    };
+    portfolioCount: number;
+}) {
+    const rows = [
+        ["Profile", `${formData.name} · ${creatorType === "studio_owner" ? "Production Studio" : "Freelancer"}`],
+        ["Email", formData.email],
+        ["Location", [creatorForm.city, creatorForm.state].filter(Boolean).join(", ") || "Not set"],
+        ["Phone", creatorForm.whatsappPhone || creatorForm.phone || "Not set"],
+        ["Main service", summary.mainService || "Not set"],
+        ["Services", summary.services.slice(0, 5).join(", ") || "Not set"],
+        ["Events", summary.events.slice(0, 5).join(", ") || "Not selected"],
+        ["Equipment", summary.equipment.slice(0, 5).join(", ") || "Not selected"],
+        ["Post", summary.post.slice(0, 5).join(", ") || "Not selected"],
+        ["Service cities", commaList(summary.serviceCities) || creatorForm.serviceCities || "Not set"],
+        ["Day rate", creatorForm.dayRate ? `Rs ${Number(creatorForm.dayRate).toLocaleString("en-IN")}` : "Not set"],
+        ["Portfolio", `${creatorForm.portfolioUrl ? "Link added" : "No link"} · ${portfolioCount} media file(s)`],
+    ];
+    return (
+        <div className="space-y-4">
+            <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+                <h2 className="font-black text-stone-900">Review your creator profile</h2>
+                <p className="mt-1 text-sm font-semibold text-stone-600">You can edit all of this later from Creator Dashboard.</p>
+            </div>
+            <div className="grid gap-3">
+                {rows.map(([label, value]) => (
+                    <div key={label} className="rounded-xl bg-stone-50 p-4">
+                        <p className="text-xs font-black uppercase tracking-wide text-stone-400">{label}</p>
+                        <p className="mt-1 text-sm font-bold text-stone-900">{value}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
     );
 }
 

@@ -1,6 +1,7 @@
 "use client";
 import { ArrowRight, Twitter, Instagram, Linkedin, Globe, Mail, Phone } from "lucide-react";
 import Link from "next/link";
+import { legalFooterLinks } from "@/lib/legal/legalContent";
 
 export const Footer = () => {
     return (
@@ -91,8 +92,13 @@ export const Footer = () => {
                     <div>
                         <h4 className="font-bold text-stone-900 mb-4 tracking-wide font-display">Legal</h4>
                         <ul className="space-y-3">
-                            <li><Link href="/terms" className="text-stone-500 hover:text-orange-600 transition-colors">Terms of Service</Link></li>
-                            <li><Link href="/privacy" className="text-stone-500 hover:text-orange-600 transition-colors">Privacy Policy</Link></li>
+                            {legalFooterLinks.map((link) => (
+                                <li key={link.href}>
+                                    <Link href={link.href} className="text-stone-500 hover:text-orange-600 transition-colors">
+                                        {link.label}
+                                    </Link>
+                                </li>
+                            ))}
                             <li><Link href="/cookies" className="text-stone-500 hover:text-orange-600 transition-colors">Cookie Policy</Link></li>
                         </ul>
                     </div>
