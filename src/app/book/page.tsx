@@ -255,7 +255,7 @@ export default function BookingFlow() {
         { id: "full", label: "Full Production Crew", description: "Larger setup with direction, video, drone, and sound.", crew: { photographer: 1, videographer: 1, drone_operator: 1, sound_engineer: 1, production_manager: 1 } },
         { id: "custom", label: "Custom Setup", description: "Pick every crew role, equipment item, and post service yourself.", crew: {} },
     ] as const;
-    const suggestedSetup = selectedEventType
+    const suggestedSetup = selectedEventType && setupPreset !== "custom" && selectedEventType !== CUSTOM_EVENT_TYPE_ID
         ? getSuggestedProductionSetup(selectedEventType, setupPreset)
         : null;
     const suggestedPreviewItems = [
@@ -265,7 +265,14 @@ export default function BookingFlow() {
     ];
     const applySetupPreset = (preset: typeof setupPresets[number]) => {
         setSetupPreset(preset.id);
-        if (preset.id !== "custom") setCrewRequirements(preset.crew);
+        if (preset.id === "custom") {
+            setCrewRequirements({});
+            setEquipmentRequirements({});
+            setPostProductionRequirements({});
+            setNeedsEquipment(false);
+            return;
+        }
+        setCrewRequirements(preset.crew);
     };
     const addSuggestedSetup = () => {
         if (!suggestedSetup) return;
@@ -322,6 +329,16 @@ export default function BookingFlow() {
         setSelectedEventCategoryId("");
         setSelectedEventType("");
         setCustomEventType("");
+    };
+    const handleQuickEventSelect = (eventType: string) => {
+        setSelectedEventType(eventType);
+        if (eventType === CUSTOM_EVENT_TYPE_ID) {
+            setSetupPreset("custom");
+            setCrewRequirements({});
+            setEquipmentRequirements({});
+            setPostProductionRequirements({});
+            setNeedsEquipment(false);
+        }
     };
     const handleProjectCategorySelect = (categoryId: string) => {
         setProjectEventCategoryId(categoryId);
@@ -974,7 +991,7 @@ export default function BookingFlow() {
                                             customEventType={customEventType}
                                             tone="orange"
                                             onChangeCategory={handleQuickCategoryChange}
-                                            onSelectEvent={setSelectedEventType}
+                                            onSelectEvent={handleQuickEventSelect}
                                             onCustomEventChange={setCustomEventType}
                                         />
                                     )}
