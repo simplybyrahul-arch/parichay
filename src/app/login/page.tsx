@@ -4,10 +4,12 @@ import { useState } from "react";
 import { ArrowRight, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { login, resendVerificationEmail } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export default function LoginPage() {
+    const router = useRouter();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
@@ -54,6 +56,13 @@ export default function LoginPage() {
             if (result && !result.success) {
                 setErrorMsg(result.message);
                 setLoading(false);
+                return;
+            }
+
+            if (result?.redirectTo) {
+                router.push(result.redirectTo);
+                router.refresh();
+                return;
             }
         } catch (error) {
             setErrorMsg(error instanceof Error ? error.message : "Invalid email or password. Please try again.");

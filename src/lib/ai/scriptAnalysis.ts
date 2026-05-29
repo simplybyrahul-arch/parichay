@@ -31,6 +31,10 @@ export type ScriptAnalysisResult = {
     budget_range: string;
     production_checklist: string[];
     vendor_matching_tags: string[];
+    analysis_source?: "ai" | "fallback_daily_limit" | "fallback_provider_error";
+    ai_credit_used?: boolean;
+    daily_ai_limit_remaining?: number;
+    message?: string;
 };
 
 type KeywordRule = {

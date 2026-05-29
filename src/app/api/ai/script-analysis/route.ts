@@ -10,8 +10,17 @@ import {
 
 export const runtime = "nodejs";
 
-const SCRIPT_ANALYSIS_LIMIT = 10;
-const SCRIPT_ANALYSIS_WINDOW_HOURS = 1;
+const IST_OFFSET_MINUTES = 330;
+
+type AnalysisSource = "ai" | "fallback_daily_limit" | "fallback_provider_error";
+
+type ScriptAnalysisRunResult = {
+    analysis: ScriptAnalysisResult;
+    providerName: string | null;
+    usedAiCredit: boolean;
+    source: AnalysisSource;
+    message: string;
+};
 
 function createAdminClient() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -174,7 +183,7 @@ async function analyzeWithOpenAI(scriptText: string) {
     return sanitizeScriptAnalysis(JSON.parse(extractOutputText(raw)));
 }
 
-async function runScriptAnalysis(scriptText: string): Promise<ScriptAnalysisResult> {
+async function runScriptAnalysis(scriptText: string): Promise<ScriptAnalysisRunResult> {
     const providers = [
         { name: "Gemini", analyze: analyzeWithGemini },
         { name: "OpenRouter", analyze: analyzeWithOpenRouter },
@@ -184,32 +193,77 @@ async function runScriptAnalysis(scriptText: string): Promise<ScriptAnalysisResu
     for (const provider of providers) {
         try {
             const analysis = await provider.analyze(scriptText);
-            if (analysis) return analysis;
+            if (analysis) {
+                return {
+                    analysis,
+                    providerName: provider.name,
+                    usedAiCredit: true,
+                    source: "ai",
+                    message: "AI analysis used for today.",
+                };
+            }
         } catch (error) {
             console.error(`${provider.name} script analysis provider error:`, error);
         }
     }
 
-    return createFallbackScriptAnalysis(scriptText);
+    return {
+        analysis: createFallbackScriptAnalysis(scriptText),
+        providerName: null,
+        usedAiCredit: false,
+        source: "fallback_provider_error",
+        message: "AI provider was unavailable. Showing standard ShotcutCrew suggestions.",
+    };
 }
 
-async function isRateLimited(userId: string) {
+function getIstDayBounds(date = new Date()) {
+    const shifted = new Date(date.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
+    const startOfShiftedDay = Date.UTC(
+        shifted.getUTCFullYear(),
+        shifted.getUTCMonth(),
+        shifted.getUTCDate()
+    );
+
+    return {
+        start: new Date(startOfShiftedDay - IST_OFFSET_MINUTES * 60 * 1000).toISOString(),
+        end: new Date(startOfShiftedDay + 24 * 60 * 60 * 1000 - IST_OFFSET_MINUTES * 60 * 1000).toISOString(),
+    };
+}
+
+async function hasUsedDailyAiCredit(userId: string) {
     const admin = createAdminClient();
     if (!admin) return false;
 
-    const since = new Date(Date.now() - SCRIPT_ANALYSIS_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
+    const { start, end } = getIstDayBounds();
     const { count, error } = await admin
         .from("script_analyses")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
-        .gte("created_at", since);
+        .eq("used_ai_credit", true)
+        .gte("created_at", start)
+        .lt("created_at", end);
 
     if (error) {
-        console.error("Script analysis rate limit check error:", error);
+        console.error("Script analysis daily credit check error:", error);
         return false;
     }
 
-    return Number(count || 0) >= SCRIPT_ANALYSIS_LIMIT;
+    return Number(count || 0) >= 1;
+}
+
+function attachAnalysisMetadata(
+    analysis: ScriptAnalysisResult,
+    source: AnalysisSource,
+    usedAiCredit: boolean,
+    message: string
+): ScriptAnalysisResult {
+    return {
+        ...analysis,
+        analysis_source: source,
+        ai_credit_used: usedAiCredit,
+        daily_ai_limit_remaining: usedAiCredit ? 0 : source === "fallback_daily_limit" ? 0 : 1,
+        message,
+    };
 }
 
 export async function POST(request: Request) {
@@ -231,14 +285,23 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Login is required to analyze a script." }, { status: 401 });
         }
 
-        if (await isRateLimited(user.id)) {
-            return NextResponse.json(
-                { error: `Script analysis limit reached. Please try again later.` },
-                { status: 429 }
-            );
-        }
+        const alreadyUsedAiCredit = await hasUsedDailyAiCredit(user.id);
+        const runResult = alreadyUsedAiCredit
+            ? {
+                analysis: createFallbackScriptAnalysis(scriptText),
+                providerName: null,
+                usedAiCredit: false,
+                source: "fallback_daily_limit" as const,
+                message: "Daily AI credit used. Showing standard ShotcutCrew suggestions.",
+            }
+            : await runScriptAnalysis(scriptText);
 
-        const analysis = await runScriptAnalysis(scriptText);
+        const analysis = attachAnalysisMetadata(
+            runResult.analysis,
+            runResult.source,
+            runResult.usedAiCredit,
+            runResult.message
+        );
 
         const admin = createAdminClient();
         if (admin) {
@@ -246,6 +309,9 @@ export async function POST(request: Request) {
                 user_id: user.id,
                 input_text: scriptText,
                 analysis_json: analysis,
+                analysis_source: runResult.source,
+                provider_name: runResult.providerName,
+                used_ai_credit: runResult.usedAiCredit,
             });
             if (error) console.error("Script analysis save error:", error);
         }

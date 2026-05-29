@@ -255,7 +255,7 @@ export default function BookingFlow() {
         { id: "full", label: "Full Production Crew", description: "Larger setup with direction, video, drone, and sound.", crew: { photographer: 1, videographer: 1, drone_operator: 1, sound_engineer: 1, production_manager: 1 } },
         { id: "custom", label: "Custom Setup", description: "Pick every crew role, equipment item, and post service yourself.", crew: {} },
     ] as const;
-    const suggestedSetup = selectedEventType
+    const suggestedSetup = selectedEventType && setupPreset !== "custom" && selectedEventType !== CUSTOM_EVENT_TYPE_ID
         ? getSuggestedProductionSetup(selectedEventType, setupPreset)
         : null;
     const suggestedPreviewItems = [
@@ -265,7 +265,14 @@ export default function BookingFlow() {
     ];
     const applySetupPreset = (preset: typeof setupPresets[number]) => {
         setSetupPreset(preset.id);
-        if (preset.id !== "custom") setCrewRequirements(preset.crew);
+        if (preset.id === "custom") {
+            setCrewRequirements({});
+            setEquipmentRequirements({});
+            setPostProductionRequirements({});
+            setNeedsEquipment(false);
+            return;
+        }
+        setCrewRequirements(preset.crew);
     };
     const addSuggestedSetup = () => {
         if (!suggestedSetup) return;
@@ -322,6 +329,16 @@ export default function BookingFlow() {
         setSelectedEventCategoryId("");
         setSelectedEventType("");
         setCustomEventType("");
+    };
+    const handleQuickEventSelect = (eventType: string) => {
+        setSelectedEventType(eventType);
+        if (eventType === CUSTOM_EVENT_TYPE_ID) {
+            setSetupPreset("custom");
+            setCrewRequirements({});
+            setEquipmentRequirements({});
+            setPostProductionRequirements({});
+            setNeedsEquipment(false);
+        }
     };
     const handleProjectCategorySelect = (categoryId: string) => {
         setProjectEventCategoryId(categoryId);
@@ -503,6 +520,10 @@ export default function BookingFlow() {
             }
             const data = await res.json();
             setAnalysisResult(data);
+            if (data?.message) {
+                if (data.analysis_source === "ai") toast.success(data.message);
+                else toast.info(data.message);
+            }
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "Analysis failed. Please try again.");
         } finally {
@@ -974,7 +995,7 @@ export default function BookingFlow() {
                                             customEventType={customEventType}
                                             tone="orange"
                                             onChangeCategory={handleQuickCategoryChange}
-                                            onSelectEvent={setSelectedEventType}
+                                            onSelectEvent={handleQuickEventSelect}
                                             onCustomEventChange={setCustomEventType}
                                         />
                                     )}
@@ -1894,6 +1915,20 @@ export default function BookingFlow() {
                                             <CheckCircle className="w-5 h-5" />
                                             <span className="font-bold text-sm">Analysis complete</span>
                                         </div>
+                                        {analysisResult.message && (
+                                            <div className={`rounded-2xl border p-4 text-sm font-semibold ${
+                                                analysisResult.analysis_source === "ai"
+                                                    ? "border-emerald-100 bg-emerald-50 text-emerald-800"
+                                                    : "border-amber-100 bg-amber-50 text-amber-800"
+                                            }`}>
+                                                {analysisResult.message}
+                                                {typeof analysisResult.daily_ai_limit_remaining === "number" && (
+                                                    <span className="ml-2">
+                                                        AI credits remaining today: {analysisResult.daily_ai_limit_remaining}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                         <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
                                             <div className="flex flex-wrap items-center justify-between gap-3">
                                                 <div>
