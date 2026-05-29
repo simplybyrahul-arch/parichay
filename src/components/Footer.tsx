@@ -38,7 +38,7 @@ export const Footer = () => {
                             </Link>
                         </div>
                         <p className="text-sm font-semibold text-stone-500 tracking-wide">
-                            Verified creators &middot; Secure payments &middot; AI-powered planning
+                            Verified creators &middot; Payment tracking &middot; AI-assisted planning
                         </p>
                     </div>
                 </div>
@@ -50,7 +50,7 @@ export const Footer = () => {
                             SHOTCUTCREW
                         </div>
                         <p className="text-stone-500 leading-relaxed max-w-sm mb-4">
-                            The AI-enabled marketplace connecting clients with India&apos;s verified creative production professionals.
+                            The AI-assisted marketplace connecting clients with verified creative production professionals across India.
                         </p>
                         <p className="text-stone-600 text-sm font-medium mb-8">
                             A brand of Parichay Production Pvt Ltd &middot; Bilaspur, Chhattisgarh
@@ -76,8 +76,8 @@ export const Footer = () => {
                         <ul className="space-y-3">
                             <li><Link href="/book" className="text-stone-500 hover:text-orange-600 transition-colors">Quick Booking</Link></li>
                             <li><Link href="/book" className="text-stone-500 hover:text-orange-600 transition-colors">Builder Mode</Link></li>
-                            <li><Link href="/search" className="text-stone-500 hover:text-orange-600 transition-colors">AI Script Analysis</Link></li>
-                            <li><Link href="/search" className="text-stone-500 hover:text-orange-600 transition-colors">Equipment Rental</Link></li>
+                            <li><Link href="/book" className="text-stone-500 hover:text-orange-600 transition-colors">AI Script Analysis</Link></li>
+                            <li><Link href="/equipment" className="text-stone-500 hover:text-orange-600 transition-colors">Equipment Rental</Link></li>
                         </ul>
                     </div>
 
@@ -106,7 +106,7 @@ export const Footer = () => {
 
                 {/* Copyright */}
                 <div className="pt-8 border-t border-stone-200 flex flex-col md:flex-row items-center justify-between text-stone-400 text-sm gap-4">
-                    <p>&copy; 2026 ShotcutCrew . Parichay Production Pvt Ltd . All rights reserved.</p>
+                    <p>&copy; 2026 ShotcutCrew. Parichay Production Pvt Ltd. All rights reserved.</p>
                     <div className="flex gap-6">
                         <span className="flex items-center gap-1.5 hover:text-stone-700 cursor-pointer transition-colors">
                             <Globe className="w-4 h-4" />
