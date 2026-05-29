@@ -76,7 +76,7 @@ async function getActor() {
     const admin = createAdminClient();
     const { data: profile } = await admin
         .from("users")
-        .select("id, full_name, email, account_type, phone, whatsapp_phone, city, state, notification_preferences")
+        .select("id, full_name, account_type, phone, whatsapp_phone, city, state, notification_preferences")
         .eq("id", user.id)
         .single();
 

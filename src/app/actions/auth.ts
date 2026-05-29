@@ -19,6 +19,7 @@ import { LEGAL_TERMS_VERSION } from '@/lib/legal/legalContent'
 type AuthActionResult = {
     success: boolean;
     message: string;
+    redirectTo?: string;
 };
 
 const portfolioBucket = 'creator-portfolio';
@@ -147,7 +148,7 @@ async function enforceAuthRateLimit(action: string, email?: string) {
     return null;
 }
 
-export async function login(formData: FormData): Promise<AuthActionResult | never> {
+export async function login(formData: FormData): Promise<AuthActionResult> {
     const supabase = await createClient()
 
     const email = normalizeEmail(formData.get('email'))
@@ -178,18 +179,28 @@ export async function login(formData: FormData): Promise<AuthActionResult | neve
 
     revalidatePath('/', 'layout')
 
-    // Role-based routing
-    const accountType = session.user.user_metadata?.account_type
+    const { data: publicUser, error: publicUserError } = await supabase
+        .from('users')
+        .select('account_type')
+        .eq('id', user.id)
+        .maybeSingle()
+
+    if (publicUserError) {
+        console.error('Login role lookup error:', publicUserError)
+    }
+
+    // Role-based routing. Prefer the public profile role so admin fixes made in Supabase are respected.
+    const accountType = publicUser?.account_type || session.user.user_metadata?.account_type
 
     if (accountType === 'creator') {
-        redirect('/creator-dashboard')
+        return { success: true, message: 'Login successful.', redirectTo: '/creator-dashboard' }
     } else if (accountType === 'equipment_vendor') {
-        redirect('/vendor-dashboard')
+        return { success: true, message: 'Login successful.', redirectTo: '/vendor-dashboard' }
     } else if (accountType === 'admin') {
-        redirect('/admin')
+        return { success: true, message: 'Login successful.', redirectTo: '/admin' }
     } else {
         // Default to client dashboard
-        redirect('/dashboard')
+        return { success: true, message: 'Login successful.', redirectTo: '/dashboard' }
     }
 }
 

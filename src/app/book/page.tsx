@@ -520,6 +520,10 @@ export default function BookingFlow() {
             }
             const data = await res.json();
             setAnalysisResult(data);
+            if (data?.message) {
+                if (data.analysis_source === "ai") toast.success(data.message);
+                else toast.info(data.message);
+            }
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "Analysis failed. Please try again.");
         } finally {
@@ -1911,6 +1915,20 @@ export default function BookingFlow() {
                                             <CheckCircle className="w-5 h-5" />
                                             <span className="font-bold text-sm">Analysis complete</span>
                                         </div>
+                                        {analysisResult.message && (
+                                            <div className={`rounded-2xl border p-4 text-sm font-semibold ${
+                                                analysisResult.analysis_source === "ai"
+                                                    ? "border-emerald-100 bg-emerald-50 text-emerald-800"
+                                                    : "border-amber-100 bg-amber-50 text-amber-800"
+                                            }`}>
+                                                {analysisResult.message}
+                                                {typeof analysisResult.daily_ai_limit_remaining === "number" && (
+                                                    <span className="ml-2">
+                                                        AI credits remaining today: {analysisResult.daily_ai_limit_remaining}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                         <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
                                             <div className="flex flex-wrap items-center justify-between gap-3">
                                                 <div>
