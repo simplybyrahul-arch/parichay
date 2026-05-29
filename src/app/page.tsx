@@ -12,11 +12,11 @@ import { Header } from "@/components/Header";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Shotcutcrew | India's First Verified Creative Production Marketplace",
-  description: "Plan, assemble and execute on demand. Shotcutcrew connects clients with verified photographers, videographers, editors, studios and equipment providers.",
+  title: "ShotcutCrew | Verified Creative Production Marketplace",
+  description: "Plan, assemble and execute on demand. ShotcutCrew connects clients with verified photographers, videographers, editors, studios and equipment providers.",
   openGraph: {
-    title: "Shotcutcrew | India's First Verified Creative Production Marketplace",
-    description: "Plan, assemble and execute on demand. Shotcutcrew connects clients with verified photographers, videographers, editors, studios and equipment providers.",
+    title: "ShotcutCrew | Verified Creative Production Marketplace",
+    description: "Plan, assemble and execute on demand. ShotcutCrew connects clients with verified photographers, videographers, editors, studios and equipment providers.",
   },
 };
 
@@ -24,7 +24,7 @@ export default function Home() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "Shotcutcrew",
+    name: "ShotcutCrew",
     url: "https://shotcutcrew.com",
     logo: "https://shotcutcrew.com/logo.jpg",
     description: "AI-powered planning, verified creators, coordinator support, and transparent payment tracking.",

@@ -34,10 +34,10 @@ export const Header = () => {
                 ShotcutCrew
             </Link>
             <div className="hidden md:flex items-center gap-8 mx-6 text-sm font-bold text-stone-600">
-                <Link href="/search" className="hover:text-orange-600 transition-colors">Find Creators</Link>
+                <Link href="/book" className="hover:text-orange-600 transition-colors">Find Creators</Link>
                 <Link href="/equipment" className="hover:text-orange-600 transition-colors">Find Equipment</Link>
                 <Link href="#how-it-works" className="hover:text-orange-600 transition-colors">How It Works</Link>
-                <Link href="/creators" className="hover:text-orange-600 transition-colors">For Creators</Link>
+                <Link href="/signup" className="hover:text-orange-600 transition-colors">For Creators</Link>
                 <Link href="#about" className="hover:text-orange-600 transition-colors">About</Link>
             </div>
             

@@ -7,8 +7,8 @@ const modules = [
     {
         icon: <Zap className="w-8 h-8 text-orange-500 group-hover:scale-110 transition-transform" />,
         title: "01  QUICK BOOKING MODE",
-        description: "For standard projects and events. Specify your requirements and the platform auto-assigns a verified, available crew instantly.",
-        linkText: "Try Quick Booking →",
+        description: "For standard shoots and events. Share your requirements, review matching verified creators, and choose the right professional before confirmation.",
+        linkText: "Try Quick Booking ->",
         linkHref: "/book",
         className: "bg-white border-orange-200 shadow-sm",
         hasPattern: false,
@@ -16,8 +16,8 @@ const modules = [
     {
         icon: <Construction className="w-8 h-8 text-rose-500 group-hover:scale-110 transition-transform" />,
         title: "02  BUILDER MODE",
-        description: "For complex productions. Fully customise every role, equipment, scale and timeline — and get a real-time cost estimate before you commit.",
-        linkText: "Build Your Crew →",
+        description: "For larger or custom productions. Build a clear project brief with crew, equipment, timeline, references, and budget guidance so providers can respond.",
+        linkText: "Submit a Requirement ->",
         linkHref: "/book",
         className: "bg-gradient-to-br from-white to-rose-50 border-rose-200",
         hasPattern: true,
@@ -25,18 +25,18 @@ const modules = [
     {
         icon: <BrainCircuit className="w-8 h-8 text-blue-500 group-hover:scale-110 transition-transform" />,
         title: "03  AI SCRIPT ANALYSIS",
-        description: "Upload your script or brief. Our AI estimates crew size, equipment list, budget and production timeline — saving hours of planning.",
-        linkText: "Try AI Planning →",
-        linkHref: "/search",
+        description: "Paste a script or brief to get AI-assisted planning guidance for crew, equipment, timeline, risks, and booking next steps. Final scope and quotes are provider-confirmed.",
+        linkText: "Try AI Planning ->",
+        linkHref: "/book",
         className: "bg-gradient-to-br from-blue-50 to-white border-blue-200",
         hasPattern: true,
     },
     {
         icon: <Video className="w-8 h-8 text-stone-500 group-hover:scale-110 transition-transform" />,
         title: "04  EQUIPMENT RENTAL",
-        description: "Rent cameras, lighting rigs, drones and audio gear from verified providers. All tracked, verified and available in one place.",
-        linkText: "Browse Equipment →",
-        linkHref: "/search",
+        description: "Request cameras, lighting, drones, audio gear, livestream setups, and operator support from equipment providers. Availability and quotes are vendor-confirmed.",
+        linkText: "Request Equipment ->",
+        linkHref: "/equipment",
         className: "bg-white border-stone-200 shadow-sm",
         hasPattern: false,
     }
@@ -72,7 +72,6 @@ export const CoreFeatures = () => {
                             key={index}
                             className={`group p-10 md:p-12 rounded-[2rem] border relative overflow-hidden flex flex-col transition-all duration-300 hover:shadow-xl hover:-translate-y-2 ${mod.className}`}
                         >
-                            {/* Optional Background Pattern */}
                             {mod.hasPattern && (
                                 <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.04] mix-blend-multiply pointer-events-none" />
                             )}

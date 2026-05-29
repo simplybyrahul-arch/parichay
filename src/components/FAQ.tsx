@@ -10,23 +10,23 @@ const faqs = [
     },
     {
         question: "How does advance payment work?",
-        answer: "After you select a creator, payment is collected securely through Razorpay test or live mode depending on your environment. Automated settlement, refunds and smart-contract release are future platform workflows.",
+        answer: "After you continue with a provider, ShotcutCrew tracks payment project-wise through supported payment methods such as QR/manual verification and Razorpay where configured. Vendor payouts, refunds, and settlements are handled through admin-reviewed workflows.",
     },
     {
         question: "Can I book a full production crew at once?",
-        answer: "Yes. Use Builder Mode to assemble a complete crew, including DOP, photographer, editor and equipment, and get a real-time cost estimate before you confirm.",
+        answer: "Yes. Use Builder Mode to create a production brief with required crew, equipment, deliverables, schedule, and budget guidance. Providers can respond with interest or quotes before confirmation.",
     },
     {
         question: "How does AI Script Analysis work?",
-        answer: "Upload your script or production brief. Our AI reads the requirements and outputs an estimated crew size, equipment list, timeline and budget in seconds.",
+        answer: "Upload your script or production brief to get AI-assisted planning guidance for crew, equipment, timeline, risks, and next steps. Final scope, availability, and quotes are confirmed by providers.",
     },
     {
         question: "Is Shotcutcrew available outside Bilaspur?",
-        answer: "We're launching in Bilaspur, Chhattisgarh first, then scaling to major metros and nationally. Sign up to be notified when we launch in your city.",
+        answer: "ShotcutCrew is built for India's creative production market and is starting with managed coverage from Bilaspur, Chhattisgarh. Availability depends on verified providers, service cities, and travel support.",
     },
     {
         question: "I'm a creator. How do I join?",
-        answer: "Click \"Join as Creator\", complete your profile and verification, and you'll be live on the platform. Top-rated creators get priority placement and premium shoot opportunities.",
+        answer: "Click \"Join as Creator\", complete your profile, add your services and portfolio, and submit for review. Verified providers become eligible for relevant booking opportunities.",
     }
 ];
 
