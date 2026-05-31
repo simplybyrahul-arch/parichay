@@ -9,7 +9,11 @@ import { AboutCredibility } from "@/components/AboutCredibility";
 import { FAQ } from "@/components/FAQ";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+import { LaunchCountdown } from "@/components/LaunchCountdown";
+import { getLaunchGateStatus } from "@/lib/launchGate";
 import { Metadata } from "next";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "ShotcutCrew | Verified Creative Production Marketplace",
@@ -21,6 +25,12 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
+  const launchGate = getLaunchGateStatus();
+
+  if (launchGate.isLocked) {
+    return <LaunchCountdown launchAt={launchGate.launchAt} isConfigured={launchGate.isConfigured} />;
+  }
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
