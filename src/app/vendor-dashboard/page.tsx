@@ -19,7 +19,14 @@ export default async function VendorDashboardPage() {
         .eq("id", user.id)
         .single();
 
-    if (profile?.account_type !== "equipment_vendor") {
+    const { data: vendorProvider } = await supabase
+        .from("provider_profiles")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("provider_type", "equipment_vendor")
+        .maybeSingle();
+
+    if (profile?.account_type !== "equipment_vendor" && !vendorProvider) {
         redirect(profile?.account_type === "creator" ? "/creator-dashboard" : "/dashboard");
     }
 
