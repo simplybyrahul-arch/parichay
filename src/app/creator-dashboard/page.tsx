@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { type FormEvent, useState, useEffect, useRef } from "react";
 import useSWR from "swr";
 import {
     LayoutDashboard,
@@ -45,6 +45,8 @@ import { formatPaymentStatus } from "@/lib/projects/statusLabels";
 import { RoleSettingsPanel } from "@/components/settings/RoleSettingsPanel";
 import { deletePortfolioItem, listMyPortfolioItems, updatePortfolioItem, uploadPortfolioMedia, type PortfolioItem } from "../actions/portfolio";
 import { listCreatorQuickBookings, respondToQuickBooking, type CreatorQuickBookingRequest } from "../actions/quickBookings";
+import { createHybridVendorProfile } from "../actions/equipmentVendors";
+import { EQUIPMENT_VENDOR_CATEGORIES } from "@/lib/equipment/vendors";
 
 const closedProjectStatuses = new Set(["expired", "cancelled", "completed", "disputed"]);
 const acceptedPortfolioTypes = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime", "video/webm"]);
@@ -266,6 +268,10 @@ export default function CreatorDashboard() {
     const [uploadStatus, setUploadStatus] = useState("");
     const [uploadingPortfolio, setUploadingPortfolio] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [hybridVendorProviderId, setHybridVendorProviderId] = useState<string | null>(null);
+    const [checkingHybridVendor, setCheckingHybridVendor] = useState(true);
+    const [hybridVendorSaving, setHybridVendorSaving] = useState(false);
+    const [hybridVendorCategories, setHybridVendorCategories] = useState<string[]>([]);
 
     // SWR Hooks
     const { data: requests = [], isValidating: loading, mutate: mutateRequests } = useSWR(
@@ -361,16 +367,54 @@ export default function CreatorDashboard() {
                 setAvailableForBooking(user.user_metadata?.available_for_booking !== false);
                 setBudgetFlexibility(Boolean(user.user_metadata?.budget_flexibility));
                 setWhatsappOptIn(user.user_metadata?.whatsapp_opt_in !== false);
+                const { data: vendorProvider } = await supabase
+                    .from("provider_profiles")
+                    .select("id")
+                    .eq("user_id", user.id)
+                    .eq("provider_type", "equipment_vendor")
+                    .maybeSingle();
+                setHybridVendorProviderId(vendorProvider?.id || null);
             } else {
                 setUserEmail("Unknown User");
                 router.push("/login");
             }
+            setCheckingHybridVendor(false);
         };
         fetchUserData();
     }, [supabase, router]);
 
     const handleLogout = async () => {
         await logout();
+    };
+
+    const toggleHybridVendorCategory = (categoryId: string) => {
+        setHybridVendorCategories((current) =>
+            current.includes(categoryId)
+                ? current.filter((id) => id !== categoryId)
+                : [...current, categoryId]
+        );
+    };
+
+    const handleHybridVendorSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (hybridVendorCategories.length === 0) {
+            toast.error("Select at least one equipment category.");
+            return;
+        }
+
+        setHybridVendorSaving(true);
+        const formData = new FormData(event.currentTarget);
+        formData.set("equipment_categories", hybridVendorCategories.join(","));
+        const result = await createHybridVendorProfile(formData);
+        setHybridVendorSaving(false);
+
+        if (result.success) {
+            toast.success(result.message);
+            setHybridVendorProviderId("created");
+            router.refresh();
+        } else {
+            toast.error(result.message);
+        }
     };
 
     const handleAcceptRequest = async (id: string) => {
@@ -1019,6 +1063,118 @@ export default function CreatorDashboard() {
                                     <StatCard title="Jobs Completed" value={requests.filter(r => r.status === 'completed').length.toString()} trend="From project statuses" icon={<CheckCircle className="w-5 h-5 text-blue-600" />} />
                                     <StatCard title="Trust Score" value={profile?.verified ? 'Verified' : 'Unverified'} trend="From creator profile" icon={<Star className="w-5 h-5 text-amber-500" />} />
                                 </div>
+
+                                <section className="rounded-[1.5rem] border border-orange-100 bg-white p-6 shadow-sm">
+                                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                        <div>
+                                            <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-orange-700">
+                                                Equipment Rental
+                                            </div>
+                                            <h2 className="mt-3 text-2xl font-black text-stone-900 font-display">Rent out your equipment</h2>
+                                            <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-stone-600">
+                                                If you own cameras, lights, audio gear, drones, or production tools, add vendor access to the same account and manage rental inventory from the vendor dashboard.
+                                            </p>
+                                        </div>
+                                        {hybridVendorProviderId ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => router.push("/vendor-dashboard")}
+                                                className="rounded-xl bg-stone-900 px-5 py-3 text-sm font-black text-white transition-colors hover:bg-stone-800"
+                                            >
+                                                Open Vendor Dashboard
+                                            </button>
+                                        ) : null}
+                                    </div>
+
+                                    {checkingHybridVendor ? (
+                                        <p className="mt-5 text-sm font-semibold text-stone-500">Checking vendor access...</p>
+                                    ) : hybridVendorProviderId ? (
+                                        <p className="mt-5 rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-800">
+                                            Vendor profile is available on this account. Admin verification is still required before rental requests are sent to you.
+                                        </p>
+                                    ) : (
+                                        <form onSubmit={handleHybridVendorSubmit} className="mt-6 grid gap-4">
+                                            <div className="grid gap-4 md:grid-cols-2">
+                                                <label className="text-sm font-bold text-stone-700">
+                                                    Business / display name
+                                                    <input name="business_name" defaultValue={userEmail?.split("@")[0] || ""} required className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 font-semibold outline-none focus:border-orange-500" />
+                                                </label>
+                                                <label className="text-sm font-bold text-stone-700">
+                                                    Contact name
+                                                    <input name="contact_name" defaultValue={userEmail?.split("@")[0] || ""} required className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 font-semibold outline-none focus:border-orange-500" />
+                                                </label>
+                                                <label className="text-sm font-bold text-stone-700">
+                                                    Phone
+                                                    <input name="phone" defaultValue={phone} required className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 font-semibold outline-none focus:border-orange-500" />
+                                                </label>
+                                                <label className="text-sm font-bold text-stone-700">
+                                                    WhatsApp number
+                                                    <input name="whatsapp_phone" defaultValue={whatsappPhone || phone} className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 font-semibold outline-none focus:border-orange-500" />
+                                                </label>
+                                                <label className="text-sm font-bold text-stone-700">
+                                                    City
+                                                    <input name="city" defaultValue={city} required className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 font-semibold outline-none focus:border-orange-500" />
+                                                </label>
+                                                <label className="text-sm font-bold text-stone-700">
+                                                    State
+                                                    <input name="state" defaultValue={stateName} className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 font-semibold outline-none focus:border-orange-500" />
+                                                </label>
+                                            </div>
+                                            <label className="text-sm font-bold text-stone-700">
+                                                Warehouse / pickup address
+                                                <input name="warehouse_address" defaultValue={location} required className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 font-semibold outline-none focus:border-orange-500" />
+                                            </label>
+
+                                            <div>
+                                                <div className="mb-3 text-sm font-bold text-stone-700">Equipment categories</div>
+                                                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                                    {EQUIPMENT_VENDOR_CATEGORIES.map((category) => {
+                                                        const selected = hybridVendorCategories.includes(category.id);
+                                                        return (
+                                                            <button
+                                                                key={category.id}
+                                                                type="button"
+                                                                onClick={() => toggleHybridVendorCategory(category.id)}
+                                                                className={`rounded-xl border px-3 py-3 text-left text-sm font-bold transition-colors ${selected ? "border-orange-500 bg-orange-50 text-orange-700" : "border-stone-200 bg-white text-stone-700 hover:border-orange-300"}`}
+                                                            >
+                                                                {category.label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid gap-4 md:grid-cols-3">
+                                                <label className="text-sm font-bold text-stone-700">
+                                                    Delivery available
+                                                    <select name="delivery_available" className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 font-semibold outline-none focus:border-orange-500">
+                                                        <option value="false">No</option>
+                                                        <option value="true">Yes</option>
+                                                    </select>
+                                                </label>
+                                                <label className="text-sm font-bold text-stone-700">
+                                                    Delivery radius km
+                                                    <input name="delivery_radius_km" type="number" min="0" defaultValue="0" className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 font-semibold outline-none focus:border-orange-500" />
+                                                </label>
+                                                <label className="text-sm font-bold text-stone-700">
+                                                    Operator support
+                                                    <select name="operator_support_available" className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-3 font-semibold outline-none focus:border-orange-500">
+                                                        <option value="false">No</option>
+                                                        <option value="true">Yes</option>
+                                                    </select>
+                                                </label>
+                                            </div>
+
+                                            <button
+                                                type="submit"
+                                                disabled={hybridVendorSaving}
+                                                className="w-fit rounded-xl bg-orange-600 px-5 py-3 text-sm font-black text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+                                            >
+                                                {hybridVendorSaving ? "Creating..." : "Add Equipment Vendor Profile"}
+                                            </button>
+                                        </form>
+                                    )}
+                                </section>
 
                                 <OpportunitySection
                                     opportunities={opportunities}

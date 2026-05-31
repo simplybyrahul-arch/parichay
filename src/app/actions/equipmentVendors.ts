@@ -150,8 +150,8 @@ async function requireVendor() {
         .eq("id", user.id)
         .single();
 
-    if (error || profile?.account_type !== "equipment_vendor") {
-        throw new Error("Equipment vendor account required.");
+    if (error || !["equipment_vendor", "creator"].includes(String(profile?.account_type || ""))) {
+        throw new Error("Equipment vendor access is required.");
     }
 
     const { data: provider, error: providerError } = await admin
@@ -166,6 +166,93 @@ async function requireVendor() {
     }
 
     return { admin, user, userProfile: profile, provider };
+}
+
+export async function createHybridVendorProfile(formData: FormData): Promise<ActionResult> {
+    try {
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Login required.");
+
+        const admin = createAdminClient();
+        const { data: profile, error: profileError } = await admin
+            .from("users")
+            .select("id, full_name, account_type")
+            .eq("id", user.id)
+            .single();
+
+        if (profileError || profile?.account_type !== "creator") {
+            return { success: false, message: "Only creator accounts can add equipment vendor access from this dashboard." };
+        }
+
+        const businessName = cleanText(formData.get("business_name"));
+        const contactName = cleanText(formData.get("contact_name")) || profile.full_name || businessName;
+        const phone = cleanText(formData.get("phone"));
+        const city = cleanText(formData.get("city"));
+        const warehouseAddress = cleanText(formData.get("warehouse_address"));
+        const equipmentCategories = cleanText(formData.get("equipment_categories"))
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean);
+
+        if (!businessName || !contactName || !phone || !city || !warehouseAddress || equipmentCategories.length === 0) {
+            return { success: false, message: "Business name, contact, phone, city, warehouse address, and equipment categories are required." };
+        }
+
+        const profileCompletion = calculateProfileCompletion({
+            businessName,
+            contactName,
+            city,
+            phone,
+            warehouseAddress,
+            equipmentCategories,
+            deliveryAvailable: String(formData.get("delivery_available")) === "true",
+        });
+
+        const { data: provider, error: providerError } = await admin
+            .from("provider_profiles")
+            .upsert({
+                user_id: user.id,
+                provider_type: "equipment_vendor",
+                provider_subtype: "individual_vendor",
+                business_name: businessName,
+                contact_name: contactName,
+                city,
+                state: cleanText(formData.get("state")) || null,
+                profile_completion: profileCompletion,
+                verified: false,
+                updated_at: new Date().toISOString(),
+            }, { onConflict: "user_id,provider_type" })
+            .select("id")
+            .single();
+
+        if (providerError || !provider) throw providerError || new Error("Could not create vendor provider profile.");
+
+        const { error: vendorError } = await admin
+            .from("equipment_vendor_profiles")
+            .upsert({
+                provider_id: provider.id,
+                phone,
+                whatsapp_phone: cleanText(formData.get("whatsapp_phone")) || phone,
+                warehouse_address: warehouseAddress,
+                gst_number: cleanText(formData.get("gst_number")) || null,
+                years_in_business: cleanNumber(formData.get("years_in_business")),
+                delivery_available: String(formData.get("delivery_available")) === "true",
+                delivery_radius_km: cleanNumber(formData.get("delivery_radius_km"), 0),
+                operator_support_available: String(formData.get("operator_support_available")) === "true",
+                equipment_categories: equipmentCategories,
+                updated_at: new Date().toISOString(),
+            }, { onConflict: "provider_id" });
+
+        if (vendorError) throw vendorError;
+
+        revalidatePath("/creator-dashboard");
+        revalidatePath("/vendor-dashboard");
+        return { success: true, message: "Equipment vendor profile created. Admin verification is required before receiving rental requests." };
+    } catch (error) {
+        console.error("Hybrid vendor profile create error:", error);
+        return { success: false, message: error instanceof Error ? error.message : "Could not create equipment vendor profile." };
+    }
 }
 
 export async function getVendorDashboardData(): Promise<VendorDashboardData> {

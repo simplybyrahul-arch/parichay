@@ -102,12 +102,23 @@ export async function updateSession(request: NextRequest) {
     const isEmailConfirmed = Boolean(user?.email_confirmed_at || user?.confirmed_at)
 
     let accountType = user?.user_metadata?.account_type
+    let hasVendorProviderProfile = false
     const shouldLoadProfile = Boolean(user)
         && (isAuthPath || isDashboardPath || isCreatorDashboardPath || isVendorDashboardPath || isAdminPath || isLaunchGateLocked())
 
     if (shouldLoadProfile) {
         const { data: profile } = await supabase.from('users').select('account_type').eq('id', user!.id).single()
         accountType = profile?.account_type || accountType
+    }
+
+    if (user && isVendorDashboardPath && accountType === 'creator') {
+        const { data: vendorProvider } = await supabase
+            .from('provider_profiles')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('provider_type', 'equipment_vendor')
+            .maybeSingle()
+        hasVendorProviderProfile = Boolean(vendorProvider)
     }
 
     if (isLaunchGateLocked() && isLaunchBlockedPath(request.nextUrl.pathname)) {
@@ -168,7 +179,7 @@ export async function updateSession(request: NextRequest) {
             return NextResponse.redirect(url)
         }
 
-        if (isVendorDashboardPath && accountType !== 'equipment_vendor') {
+        if (isVendorDashboardPath && accountType !== 'equipment_vendor' && !hasVendorProviderProfile) {
             const url = request.nextUrl.clone()
             url.pathname = accountType === 'creator' ? '/creator-dashboard' : '/dashboard'
             return NextResponse.redirect(url)
