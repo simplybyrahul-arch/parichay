@@ -2,6 +2,33 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit } from '../rate-limit'
 import { secureCookieOptions } from '../auth-security'
+import { isLaunchGateLocked } from '@/lib/launchGate'
+
+const launchBlockedPrefixes = [
+    '/book',
+    '/signup',
+    '/equipment',
+    '/search',
+    '/dashboard',
+    '/creator-dashboard',
+    '/vendor-dashboard',
+    '/opportunities',
+    '/creators',
+    '/pricing',
+    '/about',
+    '/contact',
+    '/blog',
+    '/careers',
+]
+
+const launchBlockedExactPaths = new Set([
+    '/',
+])
+
+function isLaunchBlockedPath(pathname: string) {
+    return launchBlockedExactPaths.has(pathname)
+        || launchBlockedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
 
 export async function updateSession(request: NextRequest) {
     let supabaseResponse = NextResponse.next({
@@ -71,15 +98,40 @@ export async function updateSession(request: NextRequest) {
     const isBookPath = request.nextUrl.pathname.startsWith('/book')
     const isOpportunityPath = request.nextUrl.pathname.startsWith('/opportunities')
     const isProtectedPath = isDashboardPath || isCreatorDashboardPath || isVendorDashboardPath || isAdminPath || isBookPath || isOpportunityPath
+    const isAuthPath = request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup'
+    const isEmailConfirmed = Boolean(user?.email_confirmed_at || user?.confirmed_at)
+
+    let accountType = user?.user_metadata?.account_type
+    const shouldLoadProfile = Boolean(user)
+        && (isAuthPath || isDashboardPath || isCreatorDashboardPath || isVendorDashboardPath || isAdminPath || isLaunchGateLocked())
+
+    if (shouldLoadProfile) {
+        const { data: profile } = await supabase.from('users').select('account_type').eq('id', user!.id).single()
+        accountType = profile?.account_type || accountType
+    }
+
+    if (isLaunchGateLocked() && isLaunchBlockedPath(request.nextUrl.pathname)) {
+        const isConfirmedAdmin = Boolean(user && isEmailConfirmed && accountType === 'admin')
+
+        if (request.nextUrl.pathname === '/') {
+            return supabaseResponse
+        }
+
+        if (isConfirmedAdmin && isAdminPath) {
+            return supabaseResponse
+        }
+
+        const url = request.nextUrl.clone()
+        url.pathname = '/'
+        url.search = ''
+        return NextResponse.redirect(url)
+    }
 
     if (!user && isProtectedPath) {
         const url = request.nextUrl.clone()
         url.pathname = '/login'
         return NextResponse.redirect(url)
     }
-
-    const isAuthPath = request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup'
-    const isEmailConfirmed = Boolean(user?.email_confirmed_at || user?.confirmed_at)
 
     if (user && !isEmailConfirmed && (isProtectedPath || isAuthPath)) {
         await supabase.auth.signOut()
@@ -95,10 +147,6 @@ export async function updateSession(request: NextRequest) {
     }
 
     if (user && (isAuthPath || isDashboardPath || isCreatorDashboardPath || isVendorDashboardPath || isAdminPath)) {
-        // Fetch real-time account_type directly from the database to bypass stale JWT metadata issues
-        const { data: profile } = await supabase.from('users').select('account_type').eq('id', user.id).single()
-        const accountType = profile?.account_type || user.user_metadata?.account_type
-
         // If they are on the login/signup page and already logged in, redirect them
         if (isAuthPath) {
             const url = request.nextUrl.clone()
