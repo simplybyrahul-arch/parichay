@@ -96,10 +96,11 @@ function FinanceTable({ title, rows, showActions }: { title: string; rows: Booki
                                 </td>
                                 <td className="px-6 py-4 text-stone-700">{row.provider_profiles?.business_name || "Provider"}</td>
                                 <td className="px-6 py-4 text-stone-700">{row.users?.full_name || "Client"}</td>
-                                <td className="px-6 py-4 font-bold text-stone-900">{formatMoney(row.gross_booking_amount)}</td>
+                                <td className="px-6 py-4 font-bold text-stone-900">{formatMoney(row.gross_amount || row.gross_booking_amount)}</td>
                                 <td className="px-6 py-4 text-stone-700">{formatMoney(row.platform_revenue)}</td>
-                                <td className="px-6 py-4 text-stone-700">{formatMoney(row.provider_payout_amount)}</td>
+                                <td className="px-6 py-4 text-stone-700">{formatMoney(row.provider_amount || row.provider_payout_amount)}</td>
                                 <td className="space-y-1 px-6 py-4">
+                                    <StatusBadge value={row.status || "pending"} />
                                     <StatusBadge value={row.escrow_status} />
                                     <div><StatusBadge value={row.payout_status} /></div>
                                 </td>

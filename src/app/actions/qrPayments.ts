@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { createProjectUpiPaymentPayload } from "@/lib/payments/upiQr";
 import { markBookingPaymentHeld, upsertProjectBookingFinancials } from "@/lib/payments/bookingFinance";
+import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
 
 type ActionResult = {
     success: boolean;
@@ -406,6 +407,21 @@ export async function verifyQrPayment(projectId: string, paymentId: string, veri
         booking_type: project.booking_type,
     });
     await markBookingPaymentHeld(admin, project.id, project.booking_type === "equipment" ? "equipment_rental" : "custom_project");
+
+    await Promise.all([
+        sendBookingEmailToUser(admin, project.client_id, {
+            type: "payment_received",
+            bookingTitle: project.title,
+            ctaUrl: `/dashboard/${project.id}`,
+            amount: Number(project.budget || 0),
+        }),
+        project.selected_creator_id ? sendBookingEmailToUser(admin, project.selected_creator_id, {
+            type: "payment_received",
+            bookingTitle: project.title,
+            ctaUrl: "/creator-dashboard",
+            amount: Number(project.budget || 0),
+        }) : Promise.resolve(),
+    ]);
 
     const admins = actor.accountType === "admin" ? [] : await adminUsers(admin);
     await createNotifications(admin, [

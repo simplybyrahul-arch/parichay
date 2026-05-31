@@ -9,6 +9,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { commaList, creatorServiceLabel, creatorServiceOptions, parseCommaList } from "@/lib/creators/services";
 import { validatePasswordStrength } from "@/utils/auth-security";
 import { EQUIPMENT_VENDOR_CATEGORIES } from "@/lib/equipment/vendors";
+import { trackEvent } from "@/lib/analytics";
 import {
     BOOKING_CREW_CATEGORIES,
     BOOKING_EVENT_CATEGORIES,
@@ -80,6 +81,7 @@ export default function SignupPage() {
 
     const handleTypeSelection = (type: "client" | "creator" | "equipment_vendor") => {
         setAccountType(type);
+        trackEvent("signup_started", { account_type: type });
         if (type === "client") {
             setStep(3);
         } else if (type === "creator") {
@@ -402,6 +404,7 @@ export default function SignupPage() {
             }
 
             setSignupComplete(true);
+            trackEvent("signup_completed", { account_type: accountType || "client" });
             setLoading(false);
         } catch (error) {
             setErrorMsg(error instanceof Error ? error.message : "Failed to create account. Please try again.");

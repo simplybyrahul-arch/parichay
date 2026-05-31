@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { type BudgetTier, getEventTypeLabel } from "@/config/bookingOptions";
 import { upsertQuickBookingFinancials } from "@/lib/payments/bookingFinance";
+import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
 
 export type QuickBookingDraft = {
     eventType: string;
@@ -323,6 +324,14 @@ export async function selectQuickBookingCreator(input: QuickBookingDraft & { cre
             return { success: false, message: "Could not create quick booking." };
         }
 
+        const eventName = getEventTypeLabel(draft.eventType, draft.customEventType);
+        await sendBookingEmailToUser(admin, user.id, {
+            type: "booking_created",
+            bookingTitle: eventName,
+            ctaUrl: "/dashboard",
+            amount: draft.estimatedTotal,
+        });
+
         await upsertQuickBookingFinancials(admin, {
             id: booking.id,
             client_id: user.id,
@@ -331,7 +340,6 @@ export async function selectQuickBookingCreator(input: QuickBookingDraft & { cre
             estimated_total: draft.estimatedTotal,
         });
 
-        const eventName = getEventTypeLabel(draft.eventType, draft.customEventType);
         const clientName = client?.full_name || "a client";
         const title = "New quick booking request";
         const message = `New quick booking request from ${clientName} for ${eventName} on ${draft.shootDate}.`;
@@ -350,6 +358,14 @@ export async function selectQuickBookingCreator(input: QuickBookingDraft & { cre
             title,
             message,
             data: { quick_booking_id: booking.id, cta_url: "/creator-dashboard" },
+        });
+
+        await sendBookingEmailToUser(admin, input.creatorId, {
+            type: "creator_invited",
+            bookingTitle: eventName,
+            message,
+            ctaUrl: "/creator-dashboard",
+            amount: draft.estimatedTotal,
         });
 
         revalidatePath("/creator-dashboard");
@@ -417,16 +433,26 @@ export async function respondToQuickBooking(bookingId: string, status: "creator_
     if (!user) return { success: false, message: "Unauthorized." };
 
     const admin = createAdminClient();
-    const { error } = await admin
+    const { data: booking, error } = await admin
         .from("quick_bookings")
         .update({ status, responded_at: new Date().toISOString() })
         .eq("id", bookingId)
         .eq("creator_id", user.id)
-        .eq("status", "pending_creator_acceptance");
+        .eq("status", "pending_creator_acceptance")
+        .select("id, client_id, event_type, custom_event_type")
+        .single();
 
     if (error) {
         console.error("Quick booking response error:", error);
         return { success: false, message: "Could not update quick booking." };
+    }
+
+    if (status === "creator_accepted" && booking) {
+        await sendBookingEmailToUser(admin, booking.client_id, {
+            type: "booking_accepted",
+            bookingTitle: getEventTypeLabel(String(booking.event_type), booking.custom_event_type as string | null),
+            ctaUrl: "/dashboard",
+        });
     }
 
     revalidatePath("/creator-dashboard");

@@ -3,6 +3,7 @@
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
+import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
 
 type ActionResult = {
     success: boolean;
@@ -15,14 +16,21 @@ export type BookingFinancialRow = {
     booking_type: string;
     provider_id: string | null;
     client_id: string | null;
+    customer_id: string | null;
     gross_booking_amount: number;
+    gross_amount: number;
     platform_commission_amount: number;
+    platform_commission: number;
     client_service_fee_amount: number;
     provider_payout_amount: number;
+    provider_amount: number;
     client_payable_amount: number;
     platform_revenue: number;
+    escrow_amount: number;
     escrow_status: string;
     payout_status: string;
+    status: string;
+    refund_amount: number;
     currency: string;
     created_at: string;
     provider_profiles?: { business_name: string | null; provider_type: string | null } | null;
@@ -135,15 +143,15 @@ export async function getFinanceDashboardData(): Promise<FinanceDashboardData> {
 
     return {
         summary: {
-            totalGMV: sum(financials, (row) => Number(row.gross_booking_amount || 0)),
+            totalGMV: sum(financials, (row) => Number(row.gross_amount || row.gross_booking_amount || 0)),
             platformRevenue: sum(financials, (row) => Number(row.platform_revenue || 0)),
-            pendingEscrow: sum(financials.filter((row) => row.escrow_status === "escrow_held"), (row) => Number(row.gross_booking_amount || 0)),
-            pendingPayouts: sum(financials.filter((row) => row.payout_status === "ready"), (row) => Number(row.provider_payout_amount || 0)),
+            pendingEscrow: sum(financials.filter((row) => row.escrow_status === "escrow_held"), (row) => Number(row.escrow_amount || row.gross_booking_amount || 0)),
+            pendingPayouts: sum(financials.filter((row) => row.payout_status === "ready"), (row) => Number(row.provider_amount || row.provider_payout_amount || 0)),
             completedPayouts: payouts.filter((row) => row.status === "completed").reduce((total, row) => total + Number(row.net_payout || 0), 0),
             clientServiceFees: sum(financials, (row) => Number(row.client_service_fee_amount || 0)),
-            providerCommissionRevenue: sum(financials, (row) => Number(row.platform_commission_amount || 0)),
+            providerCommissionRevenue: sum(financials, (row) => Number(row.platform_commission || row.platform_commission_amount || 0)),
             equipmentRevenue: sum(financials.filter((row) => row.booking_type === "equipment_rental"), (row) => Number(row.platform_revenue || 0)),
-            refundLiability: 0,
+            refundLiability: sum(financials.filter((row) => row.status === "refunded"), (row) => Number(row.refund_amount || row.gross_amount || 0)),
         },
         financials,
         pendingFinancials,
@@ -180,6 +188,12 @@ export async function releaseProviderPayout(financialId: string, payoutMethod: s
     }
 
     const admin = createAdminClient();
+    const { data: financial } = await admin
+        .from("booking_financials")
+        .select("id, booking_id, booking_type, provider_amount, provider_payout_amount, provider_profiles(user_id, provider_type)")
+        .eq("id", financialId)
+        .maybeSingle();
+
     const { error } = await admin.rpc("release_provider_payout", {
         p_booking_financial_id: financialId,
         p_payout_method: cleanMethod,
@@ -189,6 +203,18 @@ export async function releaseProviderPayout(financialId: string, payoutMethod: s
     if (error) {
         console.error("Release payout error:", error);
         return { success: false, message: error.message || "Could not release payout." };
+    }
+
+    const providerProfile = Array.isArray(financial?.provider_profiles)
+        ? financial?.provider_profiles[0]
+        : financial?.provider_profiles;
+    if (providerProfile?.user_id) {
+        await sendBookingEmailToUser(admin, String(providerProfile.user_id), {
+            type: "payout_released",
+            bookingTitle: `${String(financial?.booking_type || "booking").replace(/_/g, " ")} ${String(financial?.booking_id || "").slice(0, 8)}`,
+            ctaUrl: providerProfile.provider_type === "equipment_vendor" ? "/vendor-dashboard" : "/creator-dashboard",
+            amount: Number(financial?.provider_amount || financial?.provider_payout_amount || 0),
+        });
     }
 
     revalidatePath("/admin/finance");

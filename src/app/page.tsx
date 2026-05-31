@@ -17,13 +17,30 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "ShotcutCrew | Book Creators, Production Crews & Equipment Rentals",
-  description: "Find verified photographers, videographers, production studios, drone operators, editors, and equipment rentals. ShotcutCrew is India's production marketplace for quick bookings, custom projects, equipment rentals, and AI production planning.",
+  description: "Find verified photographers, videographers, production studios, drone operators, editors, and equipment rentals. ShotcutCrew is India's production marketplace.",
   alternates: {
-    canonical: "/",
+    canonical: "https://www.shotcutcrew.com",
   },
   openGraph: {
-    title: "ShotcutCrew | India's Production Marketplace",
-    description: "Book verified creators, production crews, studios, and equipment rentals across India.",
+    title: "ShotcutCrew | Book Creators, Production Crews & Equipment Rentals",
+    description: "Find verified photographers, videographers, production studios, drone operators, editors, and equipment rentals. ShotcutCrew is India's production marketplace.",
+    url: "https://www.shotcutcrew.com",
+    siteName: "ShotcutCrew",
+    images: [
+      {
+        url: "https://www.shotcutcrew.com/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "ShotcutCrew - Book Creators, Production Crews and Equipment Rentals",
+      },
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ShotcutCrew | Book Creators, Production Crews & Equipment Rentals",
+    description: "Find verified photographers, videographers, production studios, drone operators, editors, and equipment rentals. ShotcutCrew is India's production marketplace.",
+    images: ["https://www.shotcutcrew.com/og-image.jpg"],
   },
 };
 

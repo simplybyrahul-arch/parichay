@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { login, resendVerificationEmail } from "../actions/auth";
 import { BrandLogo } from "@/components/BrandLogo";
+import { trackEvent } from "@/lib/analytics";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -60,6 +61,7 @@ export default function LoginPage() {
             }
 
             if (result?.redirectTo) {
+                trackEvent("login_success", { redirect_to: result.redirectTo });
                 router.push(result.redirectTo);
                 router.refresh();
                 return;

@@ -4,6 +4,8 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { createClient } from "@/utils/supabase/server";
 import { matchCreators, type BookingType } from "@/lib/matching/matchCreators";
 import { matchEquipmentVendors } from "@/lib/matching/matchEquipmentVendors";
+import { upsertProjectBookingFinancials } from "@/lib/payments/bookingFinance";
+import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
 import { revalidatePath } from "next/cache";
 
 export type CreateBookingInput = {
@@ -171,6 +173,13 @@ async function notifyEquipmentVendors(
             console.error("Equipment vendor notification creation error:", notificationError);
         }
 
+        await sendBookingEmailToUser(admin, match.userId, {
+            type: "vendor_invited",
+            bookingTitle: booking.title,
+            ctaUrl: "/vendor-dashboard",
+            message: "New equipment rental request. Confirm availability and quote.",
+        });
+
         responseCount += 1;
     }
 
@@ -242,6 +251,20 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
             console.error("Booking project creation error:", projectError);
             return { success: false, message: "Could not create booking. Please try again." };
         }
+
+        await sendBookingEmailToUser(admin, user.id, {
+            type: "booking_created",
+            bookingTitle: booking.title,
+            ctaUrl: `/dashboard/${project.id}`,
+            amount: booking.budget,
+        });
+
+        await upsertProjectBookingFinancials(admin, {
+            id: project.id,
+            client_id: user.id,
+            budget: booking.budget,
+            booking_type: booking.bookingType,
+        }, { status: "pending" });
 
         if (booking.bookingType === "equipment") {
             const responseCount = await notifyEquipmentVendors(admin, project.id, booking);
@@ -329,6 +352,13 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
                     .eq("id", invite.id);
             } else {
                 inviteCount += 1;
+                await sendBookingEmailToUser(admin, match.creatorId, {
+                    type: "creator_invited",
+                    bookingTitle: booking.title,
+                    message: notificationMessage,
+                    ctaUrl: `/opportunities/${project.id}`,
+                    amount: booking.budget,
+                });
                 await admin
                     .from("project_invites")
                     .update({ notification_status: "created" })

@@ -3,6 +3,7 @@
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
+import { markBookingFinancialsRefunded } from "@/lib/payments/bookingFinance";
 
 export type ProjectDispute = {
     id: string;
@@ -234,7 +235,7 @@ export async function resolveProjectDispute(disputeId: string, resolutionType: s
     const admin = createAdminClient();
     const { data: dispute, error } = await admin
         .from("project_disputes")
-        .select("id, project_id, status, projects(id, title, client_id, selected_creator_id)")
+        .select("id, project_id, status, projects(id, title, client_id, selected_creator_id, budget, booking_type)")
         .eq("id", disputeId)
         .single();
 
@@ -283,6 +284,15 @@ export async function resolveProjectDispute(disputeId: string, resolutionType: s
         .update({ status: paymentStatus })
         .eq("project_id", project.id)
         .in("status", ["paid", "captured", "disputed"]);
+
+    if (resolutionType === "refund") {
+        await markBookingFinancialsRefunded(
+            admin,
+            String(project.id),
+            project.booking_type === "equipment" ? "equipment_rental" : "custom_project",
+            Number(project.budget || 0)
+        );
+    }
 
     const notifications = [
         {
