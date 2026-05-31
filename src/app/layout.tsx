@@ -2,28 +2,42 @@ import type { Metadata } from "next";
 import { Toaster } from "sonner";
 import "./globals.css";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://shotcutcrew.com";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.shotcutcrew.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "ShotcutCrew | AI-Enabled Creative Production Marketplace",
+    default: "ShotcutCrew | Book Creators, Production Crews & Equipment Rentals",
     template: "%s | ShotcutCrew"
   },
-  description: "Connect with verified photographers, videographers, and full production crews through a transparent, structured booking ecosystem.",
-  keywords: ["photography", "videography", "production crew", "creative marketplace", "book photographers", "find videographers", "ShotcutCrew"],
+  description: "Find verified photographers, videographers, production studios, drone operators, editors, and equipment rentals. ShotcutCrew is India's production marketplace for quick bookings, custom projects, equipment rentals, and AI production planning.",
+  keywords: [
+    "production crew booking",
+    "photographer booking",
+    "videographer booking",
+    "equipment rental India",
+    "drone operator hire",
+    "production studio",
+    "wedding videographer",
+    "event photographer",
+    "film production crew",
+    "content creator hire",
+  ],
   authors: [{ name: "ShotcutCrew Team" }],
   creator: "ShotcutCrew",
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     type: "website",
     locale: "en_IN",
-    url: "/",
-    title: "ShotcutCrew | AI-Enabled Creative Production Marketplace",
-    description: "Connect with verified photographers, videographers, and full production crews through a transparent, structured booking ecosystem.",
+    url: siteUrl,
+    title: "ShotcutCrew | India's Production Marketplace",
+    description: "Book verified creators, production crews, studios, and equipment rentals across India.",
     siteName: "ShotcutCrew",
     images: [
       {
-        url: "https://shotcutcrew.com/logo.jpg",
+        url: `${siteUrl}/og-image.png`,
         width: 1200,
         height: 630,
         alt: "ShotcutCrew - Creative Production Marketplace",
@@ -32,9 +46,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "ShotcutCrew | AI-Enabled Creative Production Marketplace",
-    description: "Connect with verified photographers, videographers, and full production crews through a transparent, structured booking ecosystem.",
-    images: ["https://shotcutcrew.com/logo.jpg"],
+    title: "ShotcutCrew | India's Production Marketplace",
+    description: "Book verified creators, production crews, studios, and equipment rentals across India.",
+    images: [`${siteUrl}/og-image.png`],
   },
   robots: {
     index: true,

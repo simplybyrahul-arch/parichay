@@ -1,0 +1,184 @@
+<svg width="1600" height="2100" viewBox="0 0 1600 2100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="hero" x1="130" y1="60" x2="1480" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111111"/>
+      <stop offset="0.58" stop-color="#1f1f1f"/>
+      <stop offset="1" stop-color="#ff4b00"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff6a00"/>
+      <stop offset="1" stop-color="#ff3d00"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#111111" flood-opacity="0.14"/>
+    </filter>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#111111" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .bg { fill: #fffaf5; }
+      .title { font: 900 64px Arial, Helvetica, sans-serif; fill: #ffffff; letter-spacing: -1px; }
+      .subtitle { font: 400 28px Arial, Helvetica, sans-serif; fill: #fff2e8; }
+      .section-title { font: 900 34px Arial, Helvetica, sans-serif; fill: #191919; }
+      .section-note { font: 400 22px Arial, Helvetica, sans-serif; fill: #6d625c; }
+      .card-title { font: 800 26px Arial, Helvetica, sans-serif; fill: #171717; }
+      .card-text { font: 400 20px Arial, Helvetica, sans-serif; fill: #5d5550; }
+      .small { font: 700 16px Arial, Helvetica, sans-serif; fill: #8a4630; letter-spacing: .5px; }
+      .route { font: 800 20px Arial, Helvetica, sans-serif; fill: #f04a00; }
+      .chip { font: 800 17px Arial, Helvetica, sans-serif; fill: #ffffff; }
+      .white { fill: #ffffff; }
+      .cream { fill: #fff4ea; }
+      .stroke { stroke: #f0ded1; stroke-width: 2; }
+      .orange-stroke { stroke: #ff4b00; stroke-width: 3; }
+      .line { stroke: #ff6a00; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+      .line-muted { stroke: #e6d7cd; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="strokeWidth">
+      <path d="M2 2L10 7L2 12" stroke="#ff6a00" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1600" height="2100"/>
+  <rect x="80" y="70" width="1440" height="300" rx="42" fill="url(#hero)" filter="url(#shadow)"/>
+  <circle cx="1320" cy="115" r="120" fill="#ffffff" opacity="0.08"/>
+  <circle cx="1450" cy="280" r="170" fill="#ffffff" opacity="0.07"/>
+  <text x="135" y="165" class="small" fill="#ffb27c">SHOTCUTCREW USER JOURNEY GUIDE</text>
+  <text x="135" y="235" class="title">Signup &amp; Login Flow</text>
+  <text x="135" y="290" class="subtitle">A simple guide for how each user enters the marketplace and lands in the right dashboard.</text>
+  <rect x="1120" y="130" width="310" height="82" rx="24" fill="#fff4ea"/>
+  <text x="1172" y="182" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="900" fill="#ff4b00">Plan. Assemble.</text>
+  <text x="1188" y="222" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="900" fill="#111111">Execute.</text>
+
+  <!-- Start -->
+  <rect x="535" y="445" width="530" height="110" rx="32" class="white stroke" filter="url(#softShadow)"/>
+  <text x="655" y="493" class="card-title">User visits ShotcutCrew</text>
+  <text x="612" y="527" class="card-text">Chooses Signup or Login from the website.</text>
+  <path d="M800 555V635" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="445" y="640" width="710" height="115" rx="34" fill="#fff4ea" stroke="#ffd5ba" stroke-width="2" filter="url(#softShadow)"/>
+  <text x="610" y="690" class="card-title">Choose Account Type</text>
+  <text x="524" y="725" class="card-text">Client, Creative Professional, Equipment Vendor, or Admin login.</text>
+
+  <!-- Branch lines -->
+  <path d="M800 755V835" class="line"/>
+  <path d="M250 835H1350" class="line"/>
+  <path d="M250 835V900" class="line" marker-end="url(#arrow)"/>
+  <path d="M615 835V900" class="line" marker-end="url(#arrow)"/>
+  <path d="M985 835V900" class="line" marker-end="url(#arrow)"/>
+  <path d="M1350 835V900" class="line" marker-end="url(#arrow)"/>
+
+  <!-- Account cards -->
+  <rect x="105" y="900" width="290" height="210" rx="30" class="white stroke" filter="url(#softShadow)"/>
+  <rect x="135" y="930" width="70" height="70" rx="20" fill="url(#orange)"/>
+  <text x="157" y="977" font-family="Arial" font-size="40" font-weight="900" fill="#ffffff">C</text>
+  <text x="135" y="1040" class="card-title">Client</text>
+  <text x="135" y="1072" class="card-text">Hires creators, studios,</text>
+  <text x="135" y="1098" class="card-text">and equipment providers.</text>
+
+  <rect x="470" y="900" width="290" height="210" rx="30" class="white stroke" filter="url(#softShadow)"/>
+  <rect x="500" y="930" width="70" height="70" rx="20" fill="url(#orange)"/>
+  <text x="522" y="977" font-family="Arial" font-size="40" font-weight="900" fill="#ffffff">P</text>
+  <text x="500" y="1040" class="card-title">Creative Pro</text>
+  <text x="500" y="1072" class="card-text">Freelancer or production</text>
+  <text x="500" y="1098" class="card-text">studio profile setup.</text>
+
+  <rect x="840" y="900" width="290" height="210" rx="30" class="white stroke" filter="url(#softShadow)"/>
+  <rect x="870" y="930" width="70" height="70" rx="20" fill="url(#orange)"/>
+  <text x="892" y="977" font-family="Arial" font-size="40" font-weight="900" fill="#ffffff">V</text>
+  <text x="870" y="1040" class="card-title">Equipment Vendor</text>
+  <text x="870" y="1072" class="card-text">Rental house, gear supplier,</text>
+  <text x="870" y="1098" class="card-text">or operator-supported vendor.</text>
+
+  <rect x="1205" y="900" width="290" height="210" rx="30" class="white stroke" filter="url(#softShadow)"/>
+  <rect x="1235" y="930" width="70" height="70" rx="20" fill="#191919"/>
+  <text x="1257" y="977" font-family="Arial" font-size="40" font-weight="900" fill="#ffffff">A</text>
+  <text x="1235" y="1040" class="card-title">Admin</text>
+  <text x="1235" y="1072" class="card-text">Manual/internal account.</text>
+  <text x="1235" y="1098" class="card-text">No public signup.</text>
+
+  <!-- Client flow -->
+  <text x="100" y="1215" class="section-title">Signup Paths</text>
+  <text x="100" y="1250" class="section-note">Each account type collects only the details needed for its marketplace role.</text>
+
+  <path d="M250 1110V1300" class="line-muted"/>
+  <rect x="80" y="1300" width="350" height="250" rx="30" class="white stroke" filter="url(#softShadow)"/>
+  <text x="120" y="1350" class="small">CLIENT SIGNUP</text>
+  <text x="120" y="1390" class="card-title">Simple Client Form</text>
+  <text x="120" y="1430" class="card-text">Name or company</text>
+  <text x="120" y="1460" class="card-text">Email and password</text>
+  <text x="120" y="1490" class="card-text">Policy consent</text>
+  <rect x="120" y="1515" width="150" height="38" rx="19" fill="#fff0e6" stroke="#ffb58c"/>
+  <text x="144" y="1540" class="route">/dashboard</text>
+
+  <!-- Creator flow -->
+  <path d="M615 1110V1300" class="line-muted"/>
+  <rect x="465" y="1300" width="360" height="470" rx="30" class="white stroke" filter="url(#softShadow)"/>
+  <text x="505" y="1350" class="small">CREATIVE PROFESSIONAL</text>
+  <text x="505" y="1390" class="card-title">Guided Creator Onboarding</text>
+  <text x="505" y="1430" class="card-text">1. Account details</text>
+  <text x="505" y="1460" class="card-text">2. Contact and location</text>
+  <text x="505" y="1490" class="card-text">3. Freelancer or studio</text>
+  <text x="505" y="1520" class="card-text">4. Services and event types</text>
+  <text x="505" y="1550" class="card-text">5. Equipment and post-production</text>
+  <text x="505" y="1580" class="card-text">6. Availability and travel</text>
+  <text x="505" y="1610" class="card-text">7. Portfolio upload or link</text>
+  <text x="505" y="1640" class="card-text">8. Review and submit</text>
+  <rect x="505" y="1685" width="230" height="38" rx="19" fill="#fff0e6" stroke="#ffb58c"/>
+  <text x="529" y="1710" class="route">/creator-dashboard</text>
+
+  <!-- Vendor flow -->
+  <path d="M985 1110V1300" class="line-muted"/>
+  <rect x="855" y="1300" width="360" height="370" rx="30" class="white stroke" filter="url(#softShadow)"/>
+  <text x="895" y="1350" class="small">EQUIPMENT VENDOR SIGNUP</text>
+  <text x="895" y="1390" class="card-title">Rental Business Setup</text>
+  <text x="895" y="1430" class="card-text">Business name and contact</text>
+  <text x="895" y="1460" class="card-text">Phone, WhatsApp, email</text>
+  <text x="895" y="1490" class="card-text">City, state, warehouse address</text>
+  <text x="895" y="1520" class="card-text">Delivery/operator support</text>
+  <text x="895" y="1550" class="card-text">Equipment categories</text>
+  <text x="895" y="1580" class="card-text">Admin verification required</text>
+  <rect x="895" y="1615" width="210" height="38" rx="19" fill="#fff0e6" stroke="#ffb58c"/>
+  <text x="919" y="1640" class="route">/vendor-dashboard</text>
+
+  <!-- Admin flow -->
+  <path d="M1350 1110V1300" class="line-muted"/>
+  <rect x="1250" y="1300" width="270" height="250" rx="30" class="white stroke" filter="url(#softShadow)"/>
+  <text x="1290" y="1350" class="small">ADMIN LOGIN</text>
+  <text x="1290" y="1390" class="card-title">Internal Access</text>
+  <text x="1290" y="1430" class="card-text">Admin account is created</text>
+  <text x="1290" y="1460" class="card-text">manually in Supabase.</text>
+  <text x="1290" y="1490" class="card-text">No public registration.</text>
+  <rect x="1290" y="1515" width="120" height="38" rx="19" fill="#f2f2f2" stroke="#d8d8d8"/>
+  <text x="1318" y="1540" font-family="Arial" font-size="20" font-weight="800" fill="#191919">/admin</text>
+
+  <!-- Hybrid provider -->
+  <rect x="465" y="1830" width="750" height="165" rx="34" fill="#111111" filter="url(#shadow)"/>
+  <rect x="505" y="1870" width="82" height="82" rx="24" fill="url(#orange)"/>
+  <text x="530" y="1926" font-family="Arial" font-size="42" font-weight="900" fill="#ffffff">+</text>
+  <text x="625" y="1885" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="900" fill="#ffffff">Hybrid Provider Option</text>
+  <text x="625" y="1924" font-family="Arial, Helvetica, sans-serif" font-size="21" fill="#fff0e6">A creator or studio can later add “Rent out your equipment” from the creator dashboard.</text>
+  <text x="625" y="1956" font-family="Arial, Helvetica, sans-serif" font-size="21" fill="#fff0e6">Same login, creator dashboard by default, vendor dashboard after vendor profile is created.</text>
+  <path d="M800 1770V1830" class="line" marker-end="url(#arrow)"/>
+
+  <!-- Login routing -->
+  <text x="100" y="1740" class="section-title">Login Routing</text>
+  <text x="100" y="1775" class="section-note">After sign in, ShotcutCrew sends each user to the correct workspace.</text>
+
+  <rect x="80" y="1830" width="320" height="165" rx="30" class="cream stroke" filter="url(#softShadow)"/>
+  <text x="120" y="1883" class="card-title">Client Login</text>
+  <text x="120" y="1922" class="card-text">Bookings, payments, timeline,</text>
+  <text x="120" y="1952" class="card-text">support, and settings.</text>
+  <text x="120" y="1985" class="route">/dashboard</text>
+
+  <rect x="1245" y="1830" width="275" height="165" rx="30" class="cream stroke" filter="url(#softShadow)"/>
+  <text x="1285" y="1883" class="card-title">Admin Login</text>
+  <text x="1285" y="1922" class="card-text">Users, providers, finance,</text>
+  <text x="1285" y="1952" class="card-text">verification, operations.</text>
+  <text x="1285" y="1985" class="route">/admin</text>
+
+  <!-- Footer notes -->
+  <rect x="80" y="2025" width="1440" height="55" rx="22" fill="#fff0e6" stroke="#ffd5ba"/>
+  <text x="120" y="2060" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#6d3c29">
+    Email verification is required for protected dashboard use. Before launch, countdown gate blocks normal users while admin QA can still access /login and /admin.
+  </text>
+</svg>

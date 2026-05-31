@@ -16,11 +16,14 @@ import { Metadata } from "next";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "ShotcutCrew | Verified Creative Production Marketplace",
-  description: "Plan, assemble and execute on demand. ShotcutCrew connects clients with verified photographers, videographers, editors, studios and equipment providers.",
+  title: "ShotcutCrew | Book Creators, Production Crews & Equipment Rentals",
+  description: "Find verified photographers, videographers, production studios, drone operators, editors, and equipment rentals. ShotcutCrew is India's production marketplace for quick bookings, custom projects, equipment rentals, and AI production planning.",
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
-    title: "ShotcutCrew | Verified Creative Production Marketplace",
-    description: "Plan, assemble and execute on demand. ShotcutCrew connects clients with verified photographers, videographers, editors, studios and equipment providers.",
+    title: "ShotcutCrew | India's Production Marketplace",
+    description: "Book verified creators, production crews, studios, and equipment rentals across India.",
   },
 };
 
@@ -35,8 +38,8 @@ export default function Home() {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: "ShotcutCrew",
-    url: "https://shotcutcrew.com",
-    logo: "https://shotcutcrew.com/logo.jpg",
+    url: "https://www.shotcutcrew.com",
+    logo: "https://www.shotcutcrew.com/logo.jpg",
     description: "AI-powered planning, verified creators, coordinator support, and transparent payment tracking.",
     sameAs: [
       "https://x.com/shotcutcrew",

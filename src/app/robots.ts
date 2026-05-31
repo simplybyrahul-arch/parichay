@@ -1,14 +1,22 @@
-import { MetadataRoute } from 'next';
+import type { MetadataRoute } from "next";
+
+const siteUrl = "https://www.shotcutcrew.com";
 
 export default function robots(): MetadataRoute.Robots {
-    const baseUrl = 'http://localhost:3000';
-
-    return {
-        rules: {
-            userAgent: '*',
-            allow: '/',
-            disallow: ['/dashboard/', '/creator-dashboard/'],
-        },
-        sitemap: `${baseUrl}/sitemap.xml`,
-    };
+  return {
+    rules: {
+      userAgent: "*",
+      allow: "/",
+      disallow: [
+        "/admin",
+        "/dashboard",
+        "/creator-dashboard",
+        "/vendor-dashboard",
+        "/api",
+        "/settings",
+        "/projects",
+      ],
+    },
+    sitemap: `${siteUrl}/sitemap.xml`,
+  };
 }
