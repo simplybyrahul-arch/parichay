@@ -41,8 +41,8 @@ function getClientServiceFeePercent(grossAmount: number) {
 
 export function calculateBookingFinancials(input: CalculateBookingFinancialsInput): BookingFinancialBreakdown {
     const grossBookingAmount = Number(input.gross_amount || 0);
-    if (!Number.isFinite(grossBookingAmount) || grossBookingAmount <= 0) {
-        throw new Error("Gross booking amount must be greater than zero.");
+    if (!Number.isFinite(grossBookingAmount) || grossBookingAmount < 0) {
+        throw new Error("Gross booking amount must be zero or greater.");
     }
 
     const platformCommissionPercent = COMMISSION_BY_BOOKING_TYPE[input.booking_type];

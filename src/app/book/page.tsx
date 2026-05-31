@@ -41,6 +41,7 @@ import {
 } from "@/lib/bookings/bookingPayload";
 import type { ScriptAnalysisResult } from "@/lib/ai/scriptAnalysis";
 import type { BookingCategory, BudgetTier } from "@/config/bookingOptions";
+import { trackEvent } from "@/lib/analytics";
 
 export default function BookingFlow() {
     const [mode, setMode] = useState<"selection" | "quick" | "builder" | "equipment" | "script">("selection");
@@ -520,6 +521,10 @@ export default function BookingFlow() {
             }
             const data = await res.json();
             setAnalysisResult(data);
+            trackEvent("script_analysis_run", {
+                analysis_source: data?.analysis_source || "unknown",
+                ai_credit_used: Boolean(data?.ai_credit_used),
+            });
             if (data?.message) {
                 if (data.analysis_source === "ai") toast.success(data.message);
                 else toast.info(data.message);
@@ -692,6 +697,10 @@ export default function BookingFlow() {
             if (!result.success) {
                 throw new Error(result.message);
             }
+            trackEvent("booking_submitted", {
+                booking_type: "custom_project",
+                match_count: result.match_count || 0,
+            });
             toast.success(`Project requirement submitted. ${result.match_count || 0} creator(s) notified for RFQ.`);
             router.push('/dashboard');
         } catch (error: unknown) {
@@ -748,6 +757,10 @@ export default function BookingFlow() {
             if (!result.success) {
                 throw new Error(result.message);
             }
+            trackEvent("equipment_request_submitted", {
+                match_count: result.match_count || 0,
+                operator_required: equipmentOperatorNeeded,
+            });
             toast.success(`Rental request submitted. ${result.match_count || 0} provider(s) notified for availability.`);
             router.push('/dashboard');
         } catch (error: unknown) {
@@ -768,6 +781,10 @@ export default function BookingFlow() {
             if (!result.success) {
                 throw new Error(result.message);
             }
+            trackEvent("booking_submitted", {
+                booking_type: "quick_booking_matches",
+                match_count: result.matches.length,
+            });
             setQuickMatches(result.matches);
             setBookingMatchCount(result.matches.length);
             setStep(6);
@@ -784,6 +801,10 @@ export default function BookingFlow() {
             const result = await selectQuickBookingCreator({ ...getQuickBookingDraft(), creatorId });
             if (!result.success) throw new Error(result.message);
             window.localStorage.removeItem("shotcutcrew_quick_booking_draft");
+            trackEvent("booking_submitted", {
+                booking_type: "quick_booking",
+                selected_creator: true,
+            });
             toast.success(result.message);
             setStep(7);
         } catch (error) {
@@ -877,7 +898,7 @@ export default function BookingFlow() {
                             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto text-left">
                                 {/* Quick Booking */}
                                 <div
-                                    onClick={() => { setMode("quick"); setStep(1); }}
+                                    onClick={() => { trackEvent("quick_booking_started"); setMode("quick"); setStep(1); }}
                                     className="bg-white p-6 rounded-[2rem] border-2 border-transparent hover:border-orange-500 cursor-pointer group transition-all duration-300 shadow-xl shadow-stone-200/50 flex flex-col"
                                 >
                                     <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mb-5">
@@ -892,7 +913,7 @@ export default function BookingFlow() {
 
                                 {/* Builder Mode */}
                                 <div
-                                    onClick={() => setMode("builder")}
+                                    onClick={() => { trackEvent("custom_project_started"); setMode("builder"); }}
                                     className="bg-white p-6 rounded-[2rem] border-2 border-transparent hover:border-rose-500 cursor-pointer group transition-all duration-300 shadow-xl shadow-stone-200/50 flex flex-col"
                                 >
                                     <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mb-5">
@@ -907,7 +928,7 @@ export default function BookingFlow() {
 
                                 {/* Equipment Booking */}
                                 <div
-                                    onClick={() => setMode("equipment")}
+                                    onClick={() => { trackEvent("equipment_request_started"); setMode("equipment"); }}
                                     className="bg-white p-6 rounded-[2rem] border-2 border-transparent hover:border-violet-500 cursor-pointer group transition-all duration-300 shadow-xl shadow-stone-200/50 flex flex-col"
                                 >
                                     <div className="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center mb-5">

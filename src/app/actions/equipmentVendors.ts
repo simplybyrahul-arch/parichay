@@ -4,6 +4,8 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { calculateProfileCompletion } from "@/lib/equipment/vendors";
+import { upsertEquipmentRentalFinancialsForProvider } from "@/lib/payments/bookingFinance";
+import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
 
 type ActionResult = {
     success: boolean;
@@ -510,19 +512,39 @@ export async function respondToRentalRequest(responseId: string, status: "availa
             return { success: false, message: "Invalid rental response status." };
         }
 
-        const { error } = await admin
+        const cleanQuoteAmount = status === "quoted" ? Number(quoteAmount || 0) : null;
+        const { data: response, error } = await admin
             .from("equipment_rental_responses")
             .update({
                 status,
-                quote_amount: status === "quoted" ? Number(quoteAmount || 0) : null,
+                quote_amount: cleanQuoteAmount,
                 notes: notes?.trim() || null,
                 responded_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
             })
             .eq("id", responseId)
-            .eq("provider_id", provider.id);
+            .eq("provider_id", provider.id)
+            .select("project_id, projects!equipment_rental_responses_project_id_fkey(id, title, client_id)")
+            .single();
 
         if (error) throw error;
+
+        if (status === "quoted" && cleanQuoteAmount !== null && cleanQuoteAmount >= 0 && response?.project_id) {
+            const project = Array.isArray(response.projects) ? response.projects[0] : response.projects;
+            await upsertEquipmentRentalFinancialsForProvider(admin, {
+                bookingId: String(response.project_id),
+                clientId: project?.client_id ? String(project.client_id) : null,
+                providerId: provider.id,
+                grossAmount: cleanQuoteAmount,
+            }, { status: "quote_selected" });
+
+            await sendBookingEmailToUser(admin, project?.client_id ? String(project.client_id) : null, {
+                type: "quote_received",
+                bookingTitle: project?.title ? String(project.title) : "Equipment rental request",
+                ctaUrl: "/dashboard",
+                amount: cleanQuoteAmount,
+            });
+        }
 
         revalidatePath("/vendor-dashboard");
         return { success: true, message: "Rental request response saved." };

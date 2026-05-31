@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/server";
 import { markBookingPaymentHeld, upsertProjectBookingFinancials } from "@/lib/payments/bookingFinance";
+import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
 
 function getRequiredEnv(name: string) {
     const value = process.env[name];
@@ -150,6 +151,21 @@ export async function POST(req: Request) {
             booking_type: project.booking_type,
         });
         await markBookingPaymentHeld(admin, project.id, project.booking_type === "equipment" ? "equipment_rental" : "custom_project");
+
+        await Promise.all([
+            sendBookingEmailToUser(admin, project.client_id, {
+                type: "payment_received",
+                bookingTitle: project.title,
+                ctaUrl: `/dashboard/${project.id}`,
+                amount: Number(project.budget || 0),
+            }),
+            sendBookingEmailToUser(admin, project.selected_creator_id, {
+                type: "payment_received",
+                bookingTitle: project.title,
+                ctaUrl: "/creator-dashboard",
+                amount: Number(project.budget || 0),
+            }),
+        ]);
 
         const notifications = [
             {

@@ -93,6 +93,7 @@ export function ExportFinanceCsv({ financials }: { financials: BookingFinancialR
             "Client Fee",
             "Provider Payout",
             "Platform Revenue",
+            "Lifecycle Status",
             "Escrow Status",
             "Payout Status",
         ];
@@ -101,11 +102,12 @@ export function ExportFinanceCsv({ financials }: { financials: BookingFinancialR
             row.booking_type,
             row.provider_profiles?.business_name || "",
             row.users?.full_name || "",
-            row.gross_booking_amount,
-            row.platform_commission_amount,
+            row.gross_amount || row.gross_booking_amount,
+            row.platform_commission || row.platform_commission_amount,
             row.client_service_fee_amount,
-            row.provider_payout_amount,
+            row.provider_amount || row.provider_payout_amount,
             row.platform_revenue,
+            row.status,
             row.escrow_status,
             row.payout_status,
         ]);

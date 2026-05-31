@@ -1,4 +1,5 @@
 import { Header } from "@/components/Header";
+import { ContactSupportForm } from "@/components/ContactSupportForm";
 
 export default function ContactPage() {
   return (
@@ -8,6 +9,7 @@ export default function ContactPage() {
         <h1 className="text-4xl font-black font-display text-stone-900 mb-4">Contact</h1>
         <p className="text-stone-600 leading-relaxed mb-2">General inquiries: rahul@shotcutcrew.com</p>
         <p className="text-stone-600 leading-relaxed">Partnerships: rahul@shotcutcrew.com</p>
+        <ContactSupportForm />
       </div>
     </main>
   );

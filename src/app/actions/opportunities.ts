@@ -3,6 +3,7 @@
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
+import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
 
 export type OpportunityStatus = "sent" | "viewed" | "interested" | "declined" | "shortlisted" | "selected" | "not_selected" | "inactive";
 
@@ -93,7 +94,7 @@ async function getInviteForCreator(projectId: string, creatorId: string) {
 
     const { data: project, error: projectError } = await admin
         .from("projects")
-        .select("id, title, description, booking_type, booking_location, event_date, estimated_days, budget, requirement_summary, status")
+        .select("id, title, description, client_id, booking_type, booking_location, event_date, estimated_days, budget, requirement_summary, status")
         .eq("id", projectId)
         .single();
 
@@ -389,6 +390,16 @@ export async function respondToOpportunity(
         if (projectError) {
             console.error("Opportunity project status update error:", projectError);
         }
+    }
+
+    if (status === "interested") {
+        await sendBookingEmailToUser(admin, project.client_id, {
+            type: "quote_received",
+            bookingTitle: String(project.title || "Booking request"),
+            message: "A creator is interested in your booking. Open ShotcutCrew to review their response and select a provider.",
+            ctaUrl: `/dashboard/${projectId}`,
+            amount: Number(project.budget || 0),
+        });
     }
 
     revalidatePath(`/opportunities/${projectId}`);
