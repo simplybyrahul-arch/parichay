@@ -1,0 +1,39 @@
+graph TD
+    %% Styling
+    classDef client fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#000,font-size:14px;
+    classDef creator fill:#03a9f4,stroke:#01579b,stroke-width:2px,color:#000,font-size:14px;
+    classDef vendor fill:#4caf50,stroke:#1b5e20,stroke-width:2px,color:#000,font-size:14px;
+    classDef auth fill:#607d8b,stroke:#263238,stroke-width:2px,color:#fff,font-size:14px;
+    classDef hybrid fill:#9c27b0,stroke:#4a148c,stroke-width:2px,color:#fff,font-size:14px;
+    classDef admin fill:#f44336,stroke:#b71c1c,stroke-width:2px,color:#fff,font-size:14px;
+    
+    %% Entry
+    Signup[/ /signup /]:::auth
+    
+    %% Signup
+    Signup --> ChooseType{Choose<br/>Account Type}:::auth
+    
+    ChooseType -->|Client| ClientForm[Client Signup<br/>Name, Email, Password]:::client
+    ChooseType -->|Creative Pro| CreatorForm[Creator Signup<br/>Services, Rates, Portfolio]:::creator
+    ChooseType -->|Vendor| VendorForm[Vendor Signup<br/>Warehouse, Equipment]:::vendor
+    
+    %% Verification
+    ClientForm --> EmailVerify((Email Verification)):::auth
+    CreatorForm --> EmailVerify
+    VendorForm --> EmailVerify
+    
+    %% Login
+    Login[/ /login /]:::auth
+    EmailVerify -->|Verified| Login
+    
+    %% Routing
+    Login --> RouteCheck{Check<br/>account_type}:::auth
+    RouteCheck -->|client| DashClient[/ /dashboard /]:::client
+    RouteCheck -->|creator| DashCreator[/ /creator-dashboard /]:::creator
+    RouteCheck -->|equipment_vendor| DashVendor[/ /vendor-dashboard /]:::vendor
+    RouteCheck -->|admin| DashAdmin[/ /admin /]:::admin
+    
+    %% Hybrid
+    DashCreator --> HybridOpt{Add Vendor<br/>Access?}:::hybrid
+    HybridOpt -->|Submit Vendor Details| HybridAccess((Hybrid Access<br/>Enabled)):::hybrid
+    HybridAccess ==>|Switch Account| DashVendor

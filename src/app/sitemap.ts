@@ -1,31 +1,32 @@
-import { MetadataRoute } from 'next';
+import type { MetadataRoute } from "next";
+
+const siteUrl = "https://www.shotcutcrew.com";
+
+const publicRoutes = [
+  "",
+  "/signup",
+  "/login",
+  "/book",
+  "/equipment",
+  "/about",
+  "/contact",
+  "/support",
+  "/terms",
+  "/privacy",
+  "/refund-policy",
+  "/community-guidelines",
+  "/creator-agreement",
+  "/equipment-rental-terms",
+  "/ai-disclaimer",
+];
 
 export default function sitemap(): MetadataRoute.Sitemap {
-    const baseUrl = 'http://localhost:3000'; // Change to production URL
+  const lastModified = new Date();
 
-    // Add all static routes
-    const routes = [
-        '',
-        '/book',
-        '/search',
-        '/login',
-        '/signup',
-    ].map((route) => ({
-        url: `${baseUrl}${route}`,
-        lastModified: new Date().toISOString(),
-        changeFrequency: 'weekly' as const,
-        priority: route === '' ? 1 : 0.8,
-    }));
-
-    // Assuming dynamic fetching of creators happens here for production
-    // Example dummy data for creators:
-    const creatorIds = ['123', '456', '789'];
-    const creatorRoutes = creatorIds.map((id) => ({
-        url: `${baseUrl}/creators/${id}`,
-        lastModified: new Date().toISOString(),
-        changeFrequency: 'monthly' as const,
-        priority: 0.6,
-    }));
-
-    return [...routes, ...creatorRoutes];
+  return publicRoutes.map((route) => ({
+    url: `${siteUrl}${route}`,
+    lastModified,
+    changeFrequency: route === "" ? "weekly" : "monthly",
+    priority: route === "" ? 1 : route === "/book" || route === "/equipment" ? 0.9 : 0.7,
+  }));
 }
