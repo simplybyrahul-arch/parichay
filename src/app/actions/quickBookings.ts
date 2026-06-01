@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { type BudgetTier, getEventTypeLabel } from "@/config/bookingOptions";
 import { upsertQuickBookingFinancials } from "@/lib/payments/bookingFinance";
-import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
+import { sendBookingCreatedEmail, sendBookingConfirmedEmail } from "@/lib/email/templates/customer";
+import { sendBookingInvitationEmail } from "@/lib/email/templates/creator";
+import { getUserEmail } from "@/lib/email/utils";
 
 export type QuickBookingDraft = {
     eventType: string;
@@ -325,12 +327,15 @@ export async function selectQuickBookingCreator(input: QuickBookingDraft & { cre
         }
 
         const eventName = getEventTypeLabel(draft.eventType, draft.customEventType);
-        await sendBookingEmailToUser(admin, user.id, {
-            type: "booking_created",
-            bookingTitle: eventName,
-            ctaUrl: "/dashboard",
-            amount: draft.estimatedTotal,
-        });
+        const clientEmail = await getUserEmail(admin, user.id);
+        if (clientEmail.email) {
+            await sendBookingCreatedEmail(
+                clientEmail.email,
+                clientEmail.name || "Client",
+                eventName,
+                booking.id
+            );
+        }
 
         await upsertQuickBookingFinancials(admin, {
             id: booking.id,
@@ -360,14 +365,16 @@ export async function selectQuickBookingCreator(input: QuickBookingDraft & { cre
             data: { quick_booking_id: booking.id, cta_url: "/creator-dashboard" },
         });
 
-        await sendBookingEmailToUser(admin, input.creatorId, {
-            type: "creator_invited",
-            bookingTitle: eventName,
-            message,
-            ctaUrl: "/creator-dashboard",
-            amount: draft.estimatedTotal,
-        });
-
+        const creatorEmail = await getUserEmail(admin, input.creatorId);
+        if (creatorEmail.email) {
+            await sendBookingInvitationEmail(
+                creatorEmail.email,
+                creatorEmail.name || "Creator",
+                clientName,
+                eventName,
+                draft.shootDate
+            );
+        }
         revalidatePath("/creator-dashboard");
         return { success: true, message: "Creator selected. They have been notified.", booking_id: booking.id };
     } catch (error) {
@@ -448,11 +455,19 @@ export async function respondToQuickBooking(bookingId: string, status: "creator_
     }
 
     if (status === "creator_accepted" && booking) {
-        await sendBookingEmailToUser(admin, booking.client_id, {
-            type: "booking_accepted",
-            bookingTitle: getEventTypeLabel(String(booking.event_type), booking.custom_event_type as string | null),
-            ctaUrl: "/dashboard",
-        });
+        const [clientEmail, creatorEmail] = await Promise.all([
+            getUserEmail(admin, booking.client_id),
+            getUserEmail(admin, user.id)
+        ]);
+        if (clientEmail.email) {
+            await sendBookingConfirmedEmail(
+                clientEmail.email,
+                clientEmail.name || "Client",
+                getEventTypeLabel(String(booking.event_type), booking.custom_event_type as string | null),
+                creatorEmail.name || "Creator",
+                "your selected date"
+            );
+        }
     }
 
     revalidatePath("/creator-dashboard");

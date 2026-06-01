@@ -4,7 +4,8 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { isClientProjectCancellable } from "@/lib/projects/status";
-import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
+import { sendBookingCancelledEmail } from "@/lib/email/templates/creator";
+import { getUserEmail } from "@/lib/email/utils";
 
 type ActionResult = {
     success: boolean;
@@ -107,11 +108,16 @@ async function notifyCancellation(
     const { error } = await admin.from("notifications").insert(notifications);
     if (error) console.error("Project cancellation notification error:", error);
 
-    await Promise.all(creatorIds.map((creatorId) => sendBookingEmailToUser(admin, creatorId, {
-        type: "booking_cancelled",
-        bookingTitle: project.title,
-        ctaUrl: "/creator-dashboard",
-    })));
+    await Promise.all(creatorIds.map(async (creatorId) => {
+        const creatorEmail = await getUserEmail(admin, creatorId);
+        if (creatorEmail.email) {
+            await sendBookingCancelledEmail(
+                creatorEmail.email,
+                creatorEmail.name || "Creator",
+                project.title || "Project"
+            );
+        }
+    }));
 }
 
 async function auditCancellation(

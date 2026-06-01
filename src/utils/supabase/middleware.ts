@@ -94,7 +94,7 @@ export async function updateSession(request: NextRequest) {
     const isDashboardPath = request.nextUrl.pathname.startsWith('/dashboard')
     const isCreatorDashboardPath = request.nextUrl.pathname.startsWith('/creator-dashboard')
     const isVendorDashboardPath = request.nextUrl.pathname.startsWith('/vendor-dashboard')
-    const isAdminPath = request.nextUrl.pathname.startsWith('/admin')
+    const isAdminPath = request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/api/admin')
     const isBookPath = request.nextUrl.pathname.startsWith('/book')
     const isOpportunityPath = request.nextUrl.pathname.startsWith('/opportunities')
     const isProtectedPath = isDashboardPath || isCreatorDashboardPath || isVendorDashboardPath || isAdminPath || isBookPath || isOpportunityPath

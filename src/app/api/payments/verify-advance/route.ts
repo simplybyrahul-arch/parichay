@@ -3,7 +3,8 @@ import crypto from "crypto";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/server";
 import { markBookingPaymentHeld, upsertProjectBookingFinancials } from "@/lib/payments/bookingFinance";
-import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
+import { sendPaymentReceivedEmail } from "@/lib/email/templates/customer";
+import { getUserEmail } from "@/lib/email/utils";
 
 function getRequiredEnv(name: string) {
     const value = process.env[name];
@@ -152,19 +153,26 @@ export async function POST(req: Request) {
         });
         await markBookingPaymentHeld(admin, project.id, project.booking_type === "equipment" ? "equipment_rental" : "custom_project");
 
+        const [clientEmail, creatorEmail] = await Promise.all([
+            getUserEmail(admin, project.client_id),
+            getUserEmail(admin, project.selected_creator_id)
+        ]);
+        
         await Promise.all([
-            sendBookingEmailToUser(admin, project.client_id, {
-                type: "payment_received",
-                bookingTitle: project.title,
-                ctaUrl: `/dashboard/${project.id}`,
-                amount: Number(project.budget || 0),
-            }),
-            sendBookingEmailToUser(admin, project.selected_creator_id, {
-                type: "payment_received",
-                bookingTitle: project.title,
-                ctaUrl: "/creator-dashboard",
-                amount: Number(project.budget || 0),
-            }),
+            clientEmail.email ? sendPaymentReceivedEmail(
+                clientEmail.email,
+                clientEmail.name || "Client",
+                project.title || "Project",
+                project.id,
+                `Rs ${Number(project.budget || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
+            ) : Promise.resolve(),
+            creatorEmail.email ? sendPaymentReceivedEmail( // We use the customer template here because it notifies them of escrowed funds.
+                creatorEmail.email,
+                creatorEmail.name || "Creator",
+                project.title || "Project",
+                project.id,
+                `Rs ${Number(project.budget || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
+            ) : Promise.resolve()
         ]);
 
         const notifications = [

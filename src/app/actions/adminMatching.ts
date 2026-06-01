@@ -4,7 +4,8 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { activeOpportunityStatuses } from "@/lib/projects/status";
-import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
+import { sendBookingInvitationEmail } from "@/lib/email/templates/creator";
+import { getUserEmail } from "@/lib/email/utils";
 
 type ActionResult = {
     success: boolean;
@@ -126,12 +127,16 @@ export async function adminInviteCreator(projectId: string, creatorId: string): 
 
     if (notificationError) console.error("Admin manual invite notification error:", notificationError);
     else {
-        await sendBookingEmailToUser(admin, creatorId, {
-            type: "creator_invited",
-            bookingTitle: project.title,
-            ctaUrl: `/opportunities/${projectId}`,
-            amount: Number(project.budget || 0),
-        });
+        const creatorEmail = await getUserEmail(admin, creatorId);
+        if (creatorEmail.email) {
+            await sendBookingInvitationEmail(
+                creatorEmail.email,
+                creatorEmail.name || "Creator",
+                "A client",
+                project.title,
+                "TBD"
+            );
+        }
     }
 
     if (["open", "matching"].includes(project.status)) {

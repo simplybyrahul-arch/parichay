@@ -3,7 +3,8 @@
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
-import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
+import { sendPayoutReleasedEmail } from "@/lib/email/templates/creator";
+import { getUserEmail } from "@/lib/email/utils";
 
 type ActionResult = {
     success: boolean;
@@ -209,12 +210,16 @@ export async function releaseProviderPayout(financialId: string, payoutMethod: s
         ? financial?.provider_profiles[0]
         : financial?.provider_profiles;
     if (providerProfile?.user_id) {
-        await sendBookingEmailToUser(admin, String(providerProfile.user_id), {
-            type: "payout_released",
-            bookingTitle: `${String(financial?.booking_type || "booking").replace(/_/g, " ")} ${String(financial?.booking_id || "").slice(0, 8)}`,
-            ctaUrl: providerProfile.provider_type === "equipment_vendor" ? "/vendor-dashboard" : "/creator-dashboard",
-            amount: Number(financial?.provider_amount || financial?.provider_payout_amount || 0),
-        });
+        const creatorEmail = await getUserEmail(admin, String(providerProfile.user_id));
+        if (creatorEmail.email) {
+            await sendPayoutReleasedEmail(
+                creatorEmail.email,
+                creatorEmail.name || "Provider",
+                `Rs ${Number(financial?.provider_amount || financial?.provider_payout_amount || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`,
+                String(financial?.booking_id || "Ref").slice(0, 8),
+                cleanUtr
+            );
+        }
     }
 
     revalidatePath("/admin/finance");

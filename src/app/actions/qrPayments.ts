@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { createProjectUpiPaymentPayload } from "@/lib/payments/upiQr";
 import { markBookingPaymentHeld, upsertProjectBookingFinancials } from "@/lib/payments/bookingFinance";
-import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
+import { sendPaymentReceivedEmail } from "@/lib/email/templates/customer";
+import { getUserEmail } from "@/lib/email/utils";
 
 type ActionResult = {
     success: boolean;
@@ -408,19 +409,26 @@ export async function verifyQrPayment(projectId: string, paymentId: string, veri
     });
     await markBookingPaymentHeld(admin, project.id, project.booking_type === "equipment" ? "equipment_rental" : "custom_project");
 
+    const [clientEmail, creatorEmail] = await Promise.all([
+        getUserEmail(admin, project.client_id),
+        project.selected_creator_id ? getUserEmail(admin, project.selected_creator_id) : Promise.resolve({ email: null, name: null })
+    ]);
+    
     await Promise.all([
-        sendBookingEmailToUser(admin, project.client_id, {
-            type: "payment_received",
-            bookingTitle: project.title,
-            ctaUrl: `/dashboard/${project.id}`,
-            amount: Number(project.budget || 0),
-        }),
-        project.selected_creator_id ? sendBookingEmailToUser(admin, project.selected_creator_id, {
-            type: "payment_received",
-            bookingTitle: project.title,
-            ctaUrl: "/creator-dashboard",
-            amount: Number(project.budget || 0),
-        }) : Promise.resolve(),
+        clientEmail.email ? sendPaymentReceivedEmail(
+            clientEmail.email,
+            clientEmail.name || "Client",
+            project.title || "Project",
+            project.id,
+            `Rs ${Number(project.budget || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
+        ) : Promise.resolve(),
+        creatorEmail.email ? sendPaymentReceivedEmail(
+            creatorEmail.email,
+            creatorEmail.name || "Creator",
+            project.title || "Project",
+            project.id,
+            `Rs ${Number(project.budget || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
+        ) : Promise.resolve(),
     ]);
 
     const admins = actor.accountType === "admin" ? [] : await adminUsers(admin);
