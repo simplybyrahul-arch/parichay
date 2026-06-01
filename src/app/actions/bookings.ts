@@ -5,7 +5,10 @@ import { createClient } from "@/utils/supabase/server";
 import { matchCreators, type BookingType } from "@/lib/matching/matchCreators";
 import { matchEquipmentVendors } from "@/lib/matching/matchEquipmentVendors";
 import { upsertProjectBookingFinancials } from "@/lib/payments/bookingFinance";
-import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
+import { sendBookingCreatedEmail } from "@/lib/email/templates/customer";
+import { sendBookingInvitationEmail } from "@/lib/email/templates/creator";
+import { sendRentalRequestEmail } from "@/lib/email/templates/vendor";
+import { getUserEmail } from "@/lib/email/utils";
 import { revalidatePath } from "next/cache";
 
 export type CreateBookingInput = {
@@ -124,7 +127,8 @@ function validateBookingInput(input: CreateBookingInput) {
 async function notifyEquipmentVendors(
     admin: ReturnType<typeof createAdminClient>,
     projectId: string,
-    booking: ReturnType<typeof validateBookingInput>
+    booking: ReturnType<typeof validateBookingInput>,
+    clientId: string
 ) {
     const matches = await matchEquipmentVendors(admin, {
         projectId,
@@ -173,12 +177,19 @@ async function notifyEquipmentVendors(
             console.error("Equipment vendor notification creation error:", notificationError);
         }
 
-        await sendBookingEmailToUser(admin, match.userId, {
-            type: "vendor_invited",
-            bookingTitle: booking.title,
-            ctaUrl: "/vendor-dashboard",
-            message: "New equipment rental request. Confirm availability and quote.",
-        });
+        const [clientEmail, vendorEmail] = await Promise.all([
+            getUserEmail(admin, clientId),
+            getUserEmail(admin, match.userId)
+        ]);
+        if (vendorEmail.email) {
+            await sendRentalRequestEmail(
+                vendorEmail.email,
+                vendorEmail.name || "Vendor",
+                clientEmail.name || "A client",
+                booking.title,
+                booking.eventDate || "TBD"
+            );
+        }
 
         responseCount += 1;
     }
@@ -252,12 +263,15 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
             return { success: false, message: "Could not create booking. Please try again." };
         }
 
-        await sendBookingEmailToUser(admin, user.id, {
-            type: "booking_created",
-            bookingTitle: booking.title,
-            ctaUrl: `/dashboard/${project.id}`,
-            amount: booking.budget,
-        });
+        const clientEmail = await getUserEmail(admin, user.id);
+        if (clientEmail.email) {
+            await sendBookingCreatedEmail(
+                clientEmail.email,
+                clientEmail.name || "Client",
+                booking.title,
+                project.id
+            );
+        }
 
         await upsertProjectBookingFinancials(admin, {
             id: project.id,
@@ -267,7 +281,7 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
         }, { status: "pending" });
 
         if (booking.bookingType === "equipment") {
-            const responseCount = await notifyEquipmentVendors(admin, project.id, booking);
+            const responseCount = await notifyEquipmentVendors(admin, project.id, booking, user.id);
             revalidatePath("/dashboard");
 
             return {
@@ -352,13 +366,16 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
                     .eq("id", invite.id);
             } else {
                 inviteCount += 1;
-                await sendBookingEmailToUser(admin, match.creatorId, {
-                    type: "creator_invited",
-                    bookingTitle: booking.title,
-                    message: notificationMessage,
-                    ctaUrl: `/opportunities/${project.id}`,
-                    amount: booking.budget,
-                });
+                const creatorEmail = await getUserEmail(admin, match.creatorId);
+                if (creatorEmail.email) {
+                    await sendBookingInvitationEmail(
+                        creatorEmail.email,
+                        creatorEmail.name || "Creator",
+                        clientEmail.name || "A client",
+                        booking.title,
+                        booking.eventDate || "TBD"
+                    );
+                }
                 await admin
                     .from("project_invites")
                     .update({ notification_status: "created" })

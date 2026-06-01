@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { calculateProfileCompletion } from "@/lib/equipment/vendors";
 import { upsertEquipmentRentalFinancialsForProvider } from "@/lib/payments/bookingFinance";
-import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
+import { sendQuoteReceivedEmail } from "@/lib/email/templates/customer";
+import { getUserEmail } from "@/lib/email/utils";
 
 type ActionResult = {
     success: boolean;
@@ -538,12 +539,18 @@ export async function respondToRentalRequest(responseId: string, status: "availa
                 grossAmount: cleanQuoteAmount,
             }, { status: "quote_selected" });
 
-            await sendBookingEmailToUser(admin, project?.client_id ? String(project.client_id) : null, {
-                type: "quote_received",
-                bookingTitle: project?.title ? String(project.title) : "Equipment rental request",
-                ctaUrl: "/dashboard",
-                amount: cleanQuoteAmount,
-            });
+            const clientId = project?.client_id ? String(project.client_id) : null;
+            if (clientId) {
+                const clientEmail = await getUserEmail(admin, clientId);
+                if (clientEmail.email) {
+                    await sendQuoteReceivedEmail(
+                        clientEmail.email,
+                        clientEmail.name || "Client",
+                        project?.title ? String(project.title) : "Equipment rental request",
+                        cleanQuoteAmount
+                    );
+                }
+            }
         }
 
         revalidatePath("/vendor-dashboard");

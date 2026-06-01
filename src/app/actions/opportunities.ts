@@ -3,7 +3,8 @@
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
-import { sendBookingEmailToUser } from "@/lib/email/bookingEmails";
+import { sendQuoteReceivedEmail } from "@/lib/email/templates/customer";
+import { getUserEmail } from "@/lib/email/utils";
 
 export type OpportunityStatus = "sent" | "viewed" | "interested" | "declined" | "shortlisted" | "selected" | "not_selected" | "inactive";
 
@@ -393,13 +394,15 @@ export async function respondToOpportunity(
     }
 
     if (status === "interested") {
-        await sendBookingEmailToUser(admin, project.client_id, {
-            type: "quote_received",
-            bookingTitle: String(project.title || "Booking request"),
-            message: "A creator is interested in your booking. Open ShotcutCrew to review their response and select a provider.",
-            ctaUrl: `/dashboard/${projectId}`,
-            amount: Number(project.budget || 0),
-        });
+        const clientEmail = await getUserEmail(admin, project.client_id);
+        if (clientEmail.email) {
+            await sendQuoteReceivedEmail(
+                clientEmail.email,
+                clientEmail.name || "Client",
+                String(project.title || "Booking request"),
+                Number(project.budget || 0)
+            );
+        }
     }
 
     revalidatePath(`/opportunities/${projectId}`);
